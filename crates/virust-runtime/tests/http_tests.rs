@@ -1,7 +1,7 @@
 use virust_runtime::VirustApp;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use tower_http::ServiceExt;
+use tower::util::ServiceExt;
 
 #[tokio::test]
 async fn test_basic_http_server() {

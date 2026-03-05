@@ -1,3 +1,9 @@
+pub mod http;
+pub mod websocket;
+pub mod watcher;
+
+pub use watcher::create_watcher;
+
 use axum::Router;
 
 pub struct VirustApp {
