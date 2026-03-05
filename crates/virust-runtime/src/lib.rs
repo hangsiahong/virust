@@ -5,6 +5,7 @@ pub mod registry;
 pub mod discovery;
 pub mod extraction;
 pub mod typescript;
+pub mod persistence;
 
 use axum::{Router, routing::get};
 use http::create_http_router;
