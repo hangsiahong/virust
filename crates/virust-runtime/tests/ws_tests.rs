@@ -1,6 +1,7 @@
 use virust_runtime::VirustApp;
-use axum::{body::Body, ServiceExt};
+use axum::body::Body;
 use axum::http::{Request, StatusCode, header::UPGRADE, header::CONNECTION};
+use tower::ServiceExt;
 
 #[tokio::test]
 async fn test_websocket_upgrade() {
