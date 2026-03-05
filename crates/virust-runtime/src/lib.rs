@@ -3,6 +3,7 @@ pub mod websocket;
 pub mod watcher;
 pub mod registry;
 pub mod discovery;
+pub mod extraction;
 
 use axum::{Router, routing::get};
 use http::create_http_router;

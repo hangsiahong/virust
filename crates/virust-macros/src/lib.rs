@@ -135,3 +135,51 @@ pub fn typescript(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
+
+/// Marks a function parameter as a path parameter
+///
+/// This is a helper attribute that can be used on function parameters.
+/// Currently it serves as a marker for documentation purposes.
+///
+/// # Example
+///
+/// ```rust
+/// #[get]
+/// async fn get_user(id: String) -> String {
+///     format!("User ID: {}", id)
+/// }
+/// ```
+///
+/// Note: This attribute is a placeholder for future implementation.
+/// The actual path parameter extraction will be handled by the runtime.
+#[proc_macro_attribute]
+pub fn path(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // For now, just return the item unchanged
+    // In a full implementation, this would parse the function
+    // and extract parameter metadata
+    item
+}
+
+/// Marks a function parameter as a JSON body parameter
+///
+/// This is a helper attribute that can be used on function parameters.
+/// Currently it serves as a marker for documentation purposes.
+///
+/// # Example
+///
+/// ```rust
+/// #[post]
+/// async fn create_user(user: User) -> String {
+///     format!("Created user: {}", user.name)
+/// }
+/// ```
+///
+/// Note: This attribute is a placeholder for future implementation.
+/// The actual body parameter extraction will be handled by the runtime.
+#[proc_macro_attribute]
+pub fn body(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // For now, just return the item unchanged
+    // In a full implementation, this would parse the function
+    // and extract parameter metadata
+    item
+}
