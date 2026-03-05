@@ -25,9 +25,10 @@ enum Commands {
         port: u16,
     },
     Init {
-        #[arg(short = 'n', long)]
+        /// Project name
         name: String,
-        #[arg(short = 't', long, default_value = "default")]
+        /// Template to use
+        #[arg(short, long, default_value = "chat")]
         template: String,
     },
 }

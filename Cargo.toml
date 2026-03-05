@@ -3,7 +3,8 @@ members = [
     "crates/virust-runtime",
     "crates/virust-macros",
     "crates/virust-protocol",
-    "crates/virust-cli"
+    "crates/virust-cli",
+    "crates/virust-typescript"
 ]
 
 resolver = "2"
