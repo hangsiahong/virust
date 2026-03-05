@@ -5,6 +5,25 @@ use virust_protocol::{HttpRequest, HttpResponse};
 pub type HttpHandler = Arc<dyn Fn(HttpRequest) -> HttpResponse + Send + Sync>;
 pub type WsHandler = Arc<dyn Fn(serde_json::Value) -> serde_json::Value + Send + Sync>;
 
+/// Route type enum for route registry
+#[derive(Debug, Clone, Copy)]
+pub enum RouteType {
+    WebSocket,
+    HttpGet,
+    HttpPost,
+    HttpPut,
+    HttpDelete,
+}
+
+/// Route entry for inventory-based route discovery
+#[derive(Debug)]
+pub struct RouteEntry {
+    pub path: &'static str,
+    pub route_type: RouteType,
+}
+
+inventory::collect!(RouteEntry);
+
 #[derive(Clone)]
 pub struct TypeDefinition {
     pub name: String,
