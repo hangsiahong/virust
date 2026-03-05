@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "crates/virust-runtime",
+    "crates/virust-macros",
+    "crates/virust-protocol",
+    "crates/virust-cli"
+]
+
+resolver = "2"
