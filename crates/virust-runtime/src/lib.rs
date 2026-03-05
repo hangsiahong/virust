@@ -2,9 +2,10 @@ pub mod http;
 pub mod websocket;
 pub mod watcher;
 
+use axum::{Router, routing::get};
+use http::create_http_router;
+use websocket::ws_upgrade;
 pub use watcher::create_watcher;
-
-use axum::Router;
 
 pub struct VirustApp {
     http_router: Router,
@@ -12,8 +13,9 @@ pub struct VirustApp {
 
 impl VirustApp {
     pub fn new() -> Self {
+        let router = create_http_router();
         Self {
-            http_router: Router::new(),
+            http_router: router.route("/ws", get(ws_upgrade)),
         }
     }
 
