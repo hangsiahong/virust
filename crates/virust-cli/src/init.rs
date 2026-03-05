@@ -106,17 +106,68 @@ async fn chat(msg: ChatMessage) -> ChatResponse {
 <body>
     <h1>Welcome to Virust!</h1>
     <p>Edit web/index.html to change this page.</p>
+    <script type="module" src="/main.js"></script>
 </body>
 </html>
 "#;
     fs::write(project_dir.join("web/index.html"), index_html)?;
+
+    // Create web/main.js
+    let main_js = r#"console.log('Virust app initialized');
+
+// You can now fetch types from the backend:
+// fetch('/api/__types')
+//   .then(r => r.json())
+//   .then(types => console.log(types));
+"#;
+    fs::write(project_dir.join("web/main.js"), main_js)?;
+
+    // Create vite.config.ts
+    let vite_config = r#"import { defineConfig } from 'vite'
+
+export default defineConfig({
+  server: {
+    port: 5173,
+    proxy: {
+      // Proxy API requests to backend
+      '/api': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+      },
+      // Proxy WebSocket connections to backend
+      '/ws': {
+        target: 'ws://127.0.0.1:3000',
+        ws: true,
+      },
+    },
+  },
+})
+"#;
+    fs::write(project_dir.join("web/vite.config.ts"), vite_config)?;
+
+    // Create web/package.json
+    let package_json = r#"{
+  "name": "virust-app",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}"#;
+    fs::write(project_dir.join("web/package.json"), package_json)?;
 
     println!("✓ Created project '{}'", name);
     println!("✓ Template: {}", template);
     println!();
     println!("Next steps:");
     println!("  cd {}", name);
-    println!("  cargo run");
+    println!("  npm install  # Install frontend dependencies");
+    println!("  virust dev  # Start both frontend and backend");
     println!();
     println!("Note: This project uses path dependencies to the local virust workspace.");
     println!("      Set VIRUST_PATH environment variable if the virust crates are in a custom location.");
