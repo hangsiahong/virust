@@ -41,20 +41,68 @@ pub fn ws(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    item
+    let input = parse_macro_input!(item as ItemFn);
+    let fn_name = &input.sig.ident;
+
+    let expanded = quote! {
+        #input
+
+        inventory::submit!(virust_macros::RouteEntry {
+            name: stringify!(#fn_name).to_string(),
+            route_type: virust_macros::RouteType::HttpGet,
+        });
+    };
+
+    TokenStream::from(expanded)
 }
 
 #[proc_macro_attribute]
 pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    item
+    let input = parse_macro_input!(item as ItemFn);
+    let fn_name = &input.sig.ident;
+
+    let expanded = quote! {
+        #input
+
+        inventory::submit!(virust_macros::RouteEntry {
+            name: stringify!(#fn_name).to_string(),
+            route_type: virust_macros::RouteType::HttpPost,
+        });
+    };
+
+    TokenStream::from(expanded)
 }
 
 #[proc_macro_attribute]
 pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    item
+    let input = parse_macro_input!(item as ItemFn);
+    let fn_name = &input.sig.ident;
+
+    let expanded = quote! {
+        #input
+
+        inventory::submit!(virust_macros::RouteEntry {
+            name: stringify!(#fn_name).to_string(),
+            route_type: virust_macros::RouteType::HttpPut,
+        });
+    };
+
+    TokenStream::from(expanded)
 }
 
 #[proc_macro_attribute]
 pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    item
+    let input = parse_macro_input!(item as ItemFn);
+    let fn_name = &input.sig.ident;
+
+    let expanded = quote! {
+        #input
+
+        inventory::submit!(virust_macros::RouteEntry {
+            name: stringify!(#fn_name).to_string(),
+            route_type: virust_macros::RouteType::HttpDelete,
+        });
+    };
+
+    TokenStream::from(expanded)
 }
