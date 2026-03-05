@@ -27,15 +27,9 @@ pub fn ws(_attr: TokenStream, item: TokenStream) -> TokenStream {
             route_type: __RouteType,
         }
 
-        // Register handler in global inventory
-        // TODO: Implement inventory registration when multiple handlers are supported
-        // inventory::submit!(__RouteEntry {
-        //     name: stringify!(#fn_name),
-        //     route_type: __RouteType::WebSocket,
-        // });
+        inventory::collect!(__RouteEntry);
 
-        // For now, just store the route info in a static
-        #[cfg(feature = "inventory")]
+        // Register handler in global inventory
         inventory::submit!(__RouteEntry {
             name: stringify!(#fn_name),
             route_type: __RouteType::WebSocket,
