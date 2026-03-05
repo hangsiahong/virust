@@ -10,7 +10,7 @@ pub enum HttpMethod {
     Delete,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HttpRequest {
     pub method: HttpMethod,
     pub path: HashMap<String, String>,
