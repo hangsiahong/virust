@@ -4,13 +4,15 @@ pub mod watcher;
 pub mod registry;
 pub mod discovery;
 pub mod extraction;
+pub mod typescript;
 
 use axum::{Router, routing::get};
 use http::create_http_router;
 use websocket::ws_upgrade;
 pub use watcher::create_watcher;
-pub use registry::{RouteRegistry, HttpHandler, WsHandler, TypeDefinition, RouteType, RouteEntry};
+pub use registry::{RouteRegistry, HttpHandler, WsHandler, TypeDefinition, RouteType, RouteEntry, register_type, get_registered_types};
 pub use discovery::{discover_routes, RouteFile};
+pub use typescript::TypeScriptGenerator;
 
 pub struct VirustApp {
     http_router: Router,

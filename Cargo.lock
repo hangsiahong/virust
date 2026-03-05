@@ -1665,6 +1665,7 @@ dependencies = [
  "futures-util",
  "inventory",
  "notify",
+ "once_cell",
  "serde",
  "serde_json",
  "tempfile",

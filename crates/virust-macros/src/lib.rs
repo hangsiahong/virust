@@ -1,6 +1,6 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ItemFn};
+use syn::{parse_macro_input, ItemFn, ReturnType, Type};
 
 /// HTTP method enum for route detection (internal use only)
 #[derive(Debug, Clone, Copy)]
@@ -11,10 +11,48 @@ enum Method {
     Delete,
 }
 
+/// Extract type name from a syn::Type, defaulting to "any" if unknown
+fn extract_type_name(ty: &Type) -> String {
+    match ty {
+        Type::Path(type_path) => {
+            if let Some(segment) = type_path.path.segments.last() {
+                segment.ident.to_string()
+            } else {
+                "any".to_string()
+            }
+        }
+        _ => "any".to_string(),
+    }
+}
+
+/// Extract input and output type names from function signature
+fn extract_function_types(input: &ItemFn) -> (String, String) {
+    // Extract input type from first parameter
+    let input_type = input.sig.inputs.iter()
+        .next()
+        .and_then(|arg| match arg {
+            syn::FnArg::Typed(pat_type) => Some(extract_type_name(&pat_type.ty)),
+            _ => None,
+        })
+        .unwrap_or_else(|| "any".to_string());
+
+    // Extract output type from return type
+    let output_type = match &input.sig.output {
+        ReturnType::Type(_, ty) => extract_type_name(ty),
+        ReturnType::Default => "void".to_string(),
+    };
+
+    (input_type, output_type)
+}
+
 #[proc_macro_attribute]
 pub fn ws(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = &input.sig.ident;
+    let fn_name_str = fn_name.to_string();
+
+    // Extract type information
+    let (input_type, output_type) = extract_function_types(&input);
 
     let expanded = quote! {
         #input
@@ -32,6 +70,7 @@ pub fn ws(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = &input.sig.ident;
+    let fn_name_str = fn_name.to_string();
 
     // Check if function name is an HTTP method
     let http_method = match fn_name.to_string().to_uppercase().as_str() {
@@ -50,6 +89,9 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
         Method::Delete => quote!(virust_runtime::RouteType::HttpDelete),
     };
 
+    // Extract type information
+    let (input_type, output_type) = extract_function_types(&input);
+
     let expanded = quote! {
         #input
 
@@ -66,6 +108,10 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = &input.sig.ident;
+    let fn_name_str = fn_name.to_string();
+
+    // Extract type information
+    let (input_type, output_type) = extract_function_types(&input);
 
     let expanded = quote! {
         #input
@@ -83,6 +129,10 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = &input.sig.ident;
+    let fn_name_str = fn_name.to_string();
+
+    // Extract type information
+    let (input_type, output_type) = extract_function_types(&input);
 
     let expanded = quote! {
         #input
@@ -100,6 +150,10 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = &input.sig.ident;
+    let fn_name_str = fn_name.to_string();
+
+    // Extract type information
+    let (input_type, output_type) = extract_function_types(&input);
 
     let expanded = quote! {
         #input
@@ -143,7 +197,8 @@ pub fn typescript(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,no_run
+/// # use virust_macros::get;
 /// #[get]
 /// async fn get_user(id: String) -> String {
 ///     format!("User ID: {}", id)
@@ -167,10 +222,11 @@ pub fn path(_attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,no_run
+/// # use virust_macros::post;
 /// #[post]
-/// async fn create_user(user: User) -> String {
-///     format!("Created user: {}", user.name)
+/// async fn create_user(user: String) -> String {
+///     format!("Created user: {}", user)
 /// }
 /// ```
 ///
