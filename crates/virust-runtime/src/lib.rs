@@ -1,11 +1,13 @@
 pub mod http;
 pub mod websocket;
 pub mod watcher;
+pub mod registry;
 
 use axum::{Router, routing::get};
 use http::create_http_router;
 use websocket::ws_upgrade;
 pub use watcher::create_watcher;
+pub use registry::{RouteRegistry, HttpHandler, WsHandler, TypeDefinition};
 
 pub struct VirustApp {
     http_router: Router,
