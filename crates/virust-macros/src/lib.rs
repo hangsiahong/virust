@@ -106,3 +106,26 @@ pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
+
+#[proc_macro_attribute]
+pub fn typescript(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemFn);
+    let fn_name = &input.sig.ident;
+
+    // Generate TypeScript code
+    let ts_code = virust_typescript::generate_typescript(
+        &fn_name.to_string(),
+        &format!("{}Input", fn_name),
+        "{ /* input fields */ }",
+        &format!("{}Output", fn_name),
+        "{ /* output fields */ }"
+    );
+
+    let expanded = quote! {
+        #input
+
+        #ts_code
+    };
+
+    TokenStream::from(expanded)
+}
