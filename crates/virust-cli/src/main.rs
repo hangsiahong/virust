@@ -1,5 +1,6 @@
 mod build;
 mod dev;
+mod init;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
@@ -15,8 +16,20 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    Build { release: bool },
-    Dev { port: u16 },
+    Build {
+        #[arg(short, long)]
+        release: bool,
+    },
+    Dev {
+        #[arg(short, long, default_value = "3000")]
+        port: u16,
+    },
+    Init {
+        #[arg(short = 'n', long)]
+        name: String,
+        #[arg(short = 't', long, default_value = "default")]
+        template: String,
+    },
 }
 
 fn main() {
@@ -28,6 +41,9 @@ fn main() {
         }
         Commands::Dev { port } => {
             dev::execute(port)
+        }
+        Commands::Init { name, template } => {
+            init::execute(&name, &template)
         }
     } {
         eprintln!("Error: {}", e);
