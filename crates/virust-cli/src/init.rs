@@ -37,6 +37,9 @@ tokio = {{ version = "1", features = ["full"] }}
 inventory = "0.3"
 axum = "0.7"
 anyhow = "1"
+lazy_static = "1.4"
+chrono = "0.4"
+uuid = {{ version = "1.0", features = ["v4"] }}
 "#,
         name,
         format!("{}/crates/virust-runtime", virust_path),
@@ -45,12 +48,12 @@ anyhow = "1"
     );
     fs::write(project_dir.join("Cargo.toml"), cargo_toml)?;
 
-    // Create lib.rs that includes api modules
-    let lib_rs = r#"pub mod api;
-
-pub use api::chat;
-"#;
-    fs::write(project_dir.join("src/lib.rs"), lib_rs)?;
+    // Template-specific setup
+    match template {
+        "chat" => setup_chat_template(project_dir)?,
+        "todo" => setup_todo_template(project_dir)?,
+        _ => setup_basic_template(project_dir)?,
+    }
 
     // Create main.rs as entry point
     let main_rs = r#"use virust_runtime::VirustApp;
@@ -77,6 +80,67 @@ async fn main() -> anyhow::Result<()> {
 }
 "#;
     fs::write(project_dir.join("src/main.rs"), main_rs)?;
+
+    // Create vite.config.ts
+    let vite_config = r#"import { defineConfig } from 'vite'
+
+export default defineConfig({
+  server: {
+    port: 5173,
+    proxy: {
+      // Proxy API requests to backend
+      '/api': {
+        target: 'http://127.0.0.1:3000',
+        changeOrigin: true,
+      },
+      // Proxy WebSocket connections to backend
+      '/ws': {
+        target: 'ws://127.0.0.1:3000',
+        ws: true,
+      },
+    },
+  },
+})
+"#;
+    fs::write(project_dir.join("web/vite.config.ts"), vite_config)?;
+
+    // Create web/package.json
+    let package_json = r#"{
+  "name": "virust-app",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}"#;
+    fs::write(project_dir.join("web/package.json"), package_json)?;
+
+    println!("✓ Created project '{}'", name);
+    println!("✓ Template: {}", template);
+    println!();
+    println!("Next steps:");
+    println!("  cd {}", name);
+    println!("  npm install  # Install frontend dependencies");
+    println!("  virust dev  # Start both frontend and backend");
+    println!();
+    println!("Note: This project uses path dependencies to the local virust workspace.");
+    println!("      Set VIRUST_PATH environment variable if the virust crates are in a custom location.");
+
+    Ok(())
+}
+
+fn setup_basic_template(project_dir: &Path) -> Result<()> {
+    // Create lib.rs that includes api modules
+    let lib_rs = r#"pub mod api;
+
+pub use api::chat;
+"#;
+    fs::write(project_dir.join("src/lib.rs"), lib_rs)?;
 
     // Create api/mod.rs to export route modules
     let api_mod = r#"pub mod chat;
@@ -130,55 +194,262 @@ async fn chat(msg: ChatMessage) -> ChatResponse {
 "#;
     fs::write(project_dir.join("web/main.js"), main_js)?;
 
-    // Create vite.config.ts
-    let vite_config = r#"import { defineConfig } from 'vite'
+    Ok(())
+}
 
-export default defineConfig({
-  server: {
-    port: 5173,
-    proxy: {
-      // Proxy API requests to backend
-      '/api': {
-        target: 'http://127.0.0.1:3000',
-        changeOrigin: true,
-      },
-      // Proxy WebSocket connections to backend
-      '/ws': {
-        target: 'ws://127.0.0.1:3000',
-        ws: true,
-      },
-    },
-  },
-})
+fn setup_chat_template(project_dir: &Path) -> Result<()> {
+    // Create lib.rs
+    let lib_rs = r#"pub mod api;
 "#;
-    fs::write(project_dir.join("web/vite.config.ts"), vite_config)?;
+    fs::write(project_dir.join("src/lib.rs"), lib_rs)?;
 
-    // Create web/package.json
-    let package_json = r#"{
-  "name": "virust-app",
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "devDependencies": {
-    "vite": "^5.0.0"
-  }
-}"#;
-    fs::write(project_dir.join("web/package.json"), package_json)?;
+    // Create api/mod.rs
+    let api_mod = r#"pub mod route;
+"#;
+    fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
-    println!("✓ Created project '{}'", name);
-    println!("✓ Template: {}", template);
-    println!();
-    println!("Next steps:");
-    println!("  cd {}", name);
-    println!("  npm install  # Install frontend dependencies");
-    println!("  virust dev  # Start both frontend and backend");
-    println!();
-    println!("Note: This project uses path dependencies to the local virust workspace.");
-    println!("      Set VIRUST_PATH environment variable if the virust crates are in a custom location.");
+    // Create api/route.rs with chat implementation
+    let route_rs = r#"use virust_macros::ws;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+#[derive(Deserialize, Serialize)]
+pub struct ChatMessage {
+    pub username: String,
+    pub message: String,
+}
+
+#[derive(Serialize, Clone)]
+pub struct ChatEntry {
+    pub id: String,
+    pub username: String,
+    pub message: String,
+    pub timestamp: i64,
+}
+
+#[derive(Serialize)]
+pub struct ChatResponse {
+    pub ok: bool,
+    pub message: Option<String>,
+}
+
+// Thread-safe message history
+lazy_static::lazy_static! {
+    static ref MESSAGE_HISTORY: Arc<RwLock<Vec<ChatEntry>>> = Arc::new(RwLock::new(Vec::new()));
+}
+
+#[ws]
+async fn route(msg: ChatMessage) -> ChatResponse {
+    let entry = ChatEntry {
+        id: uuid::Uuid::new_v4().to_string(),
+        username: msg.username.clone(),
+        message: msg.message.clone(),
+        timestamp: chrono::Utc::now().timestamp(),
+    };
+
+    // Store message in history
+    let mut history = MESSAGE_HISTORY.write().await;
+    history.push(entry.clone());
+
+    // Keep only last 100 messages
+    if history.len() > 100 {
+        history.remove(0);
+    }
+
+    println!("[{}] {}: {}", entry.id, msg.username, msg.message);
+    ChatResponse {
+        ok: true,
+        message: Some("Message received".to_string()),
+    }
+}
+
+/// Get message history
+pub async fn history() -> String {
+    let history = MESSAGE_HISTORY.read().await;
+    serde_json::to_string(&*history).unwrap_or_else(|_| "[]".to_string())
+}
+"#;
+    fs::write(project_dir.join("src/api/route.rs"), route_rs)?;
+
+    // Copy web files from template
+    copy_template_files(project_dir, "chat")?;
+
+    Ok(())
+}
+
+fn setup_todo_template(project_dir: &Path) -> Result<()> {
+    // Create lib.rs
+    let lib_rs = r#"pub mod api;
+"#;
+    fs::write(project_dir.join("src/lib.rs"), lib_rs)?;
+
+    // Create api/mod.rs
+    let api_mod = r#"pub mod todos;
+"#;
+    fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
+
+    // Create api/todos/route.rs
+    let todos_route = r#"use virust_macros::{get, post};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use virust_protocol::InMemoryPersistence;
+
+#[derive(Deserialize, Serialize)]
+pub struct CreateTodoRequest {
+    pub title: String,
+    pub description: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct TodoResponse {
+    pub id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub completed: bool,
+    pub created_at: i64,
+}
+
+// Thread-safe persistence
+lazy_static::lazy_static! {
+    static ref PERSISTENCE: Arc<InMemoryPersistence> = Arc::new(InMemoryPersistence::new());
+}
+
+/// List all todos
+#[get]
+async fn route() -> String {
+    match PERSISTENCE.list("todos").await {
+        Ok(todos) => serde_json::to_string(&todos).unwrap_or_else(|_| "[]".to_string()),
+        Err(_) => "[]".to_string(),
+    }
+}
+
+/// Create a new todo
+#[post]
+async fn route(#[body] payload: CreateTodoRequest) -> String {
+    let todo = serde_json::json!({
+        "title": payload.title,
+        "description": payload.description,
+        "completed": false,
+        "created_at": chrono::Utc::now().timestamp(),
+    });
+
+    match PERSISTENCE.create("todos", todo).await {
+        Ok(id) => {
+            let response = serde_json::json!({
+                "id": id,
+                "title": payload.title,
+                "description": payload.description,
+                "completed": false,
+                "created_at": chrono::Utc::now().timestamp(),
+            });
+            serde_json::to_string(&response).unwrap_or_else(|_| "{}".to_string())
+        }
+        Err(e) => {
+            serde_json::json!({"error": e.to_string()}).to_string()
+        }
+    }
+}
+"#;
+    fs::write(project_dir.join("src/api/todos.rs"), todos_route)?;
+
+    // Create api/todos_id/route.rs for individual todo operations
+    fs::create_dir_all(project_dir.join("src/api/todos_id"))?;
+    let todos_id_route = r#"use virust_macros::{get, put, delete};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+use virust_protocol::InMemoryPersistence;
+
+#[derive(Deserialize)]
+pub struct UpdateTodoRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub completed: Option<bool>,
+}
+
+#[derive(Serialize)]
+pub struct TodoResponse {
+    pub id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub completed: bool,
+    pub created_at: i64,
+}
+
+// Thread-safe persistence (shared with todos.rs)
+lazy_static::lazy_static! {
+    static ref PERSISTENCE: Arc<InMemoryPersistence> = Arc::new(InMemoryPersistence::new());
+}
+
+/// Get a specific todo by ID
+#[get]
+async fn route(#[path] id: String) -> String {
+    match PERSISTENCE.get("todos", &id).await {
+        Ok(Some(todo)) => serde_json::to_string(&todo).unwrap_or_else(|_| "{}".to_string()),
+        Ok(None) => serde_json::json!({"error": "Todo not found"}).to_string(),
+        Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
+    }
+}
+
+/// Update a todo by ID
+#[put]
+async fn route(#[path] id: String, #[body] payload: UpdateTodoRequest) -> String {
+    // First get the existing todo
+    let existing = match PERSISTENCE.get("todos", &id).await {
+        Ok(Some(todo)) => todo,
+        Ok(None) => return serde_json::json!({"error": "Todo not found"}).to_string(),
+        Err(e) => return serde_json::json!({"error": e.to_string()}).to_string(),
+    };
+
+    // Update fields if provided
+    let mut updated = existing;
+    if let Some(title) = payload.title {
+        updated["title"] = serde_json::Value::String(title);
+    }
+    if let Some(description) = payload.description {
+        updated["description"] = serde_json::Value::String(description);
+    }
+    if let Some(completed) = payload.completed {
+        updated["completed"] = serde_json::Value::Bool(completed);
+    }
+
+    match PERSISTENCE.update("todos", &id, updated.clone()).await {
+        Ok(_) => serde_json::to_string(&updated).unwrap_or_else(|_| "{}".to_string()),
+        Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
+    }
+}
+
+/// Delete a todo by ID
+#[delete]
+async fn route(#[path] id: String) -> String {
+    match PERSISTENCE.delete("todos", &id).await {
+        Ok(_) => serde_json::json!({"success": true}).to_string(),
+        Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
+    }
+}
+"#;
+    fs::write(project_dir.join("src/api/todos_id/route.rs"), todos_id_route)?;
+
+    // Copy web files from template
+    copy_template_files(project_dir, "todo")?;
+
+    Ok(())
+}
+
+fn copy_template_files(project_dir: &Path, template_name: &str) -> Result<()> {
+    // Get the template directory path
+    let template_dir = Path::new("crates/virust-cli/templates").join(template_name).join("web");
+
+    // Copy each file from the template
+    for file in &["index.html", "main.js", "styles.css"] {
+        let src = template_dir.join(file);
+        let dst = project_dir.join("web").join(file);
+
+        if src.exists() {
+            let content = fs::read_to_string(&src)?;
+            fs::write(&dst, content)?;
+        }
+    }
 
     Ok(())
 }
