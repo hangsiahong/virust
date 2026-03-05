@@ -54,14 +54,22 @@ pub use api::chat;
 
     // Create main.rs as entry point
     let main_rs = r#"use virust_runtime::VirustApp;
+use std::env;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let args: Vec<String> = env::args().collect();
+    let port = args.iter()
+        .position(|x| x == "--port")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(3000);
+
     let app = VirustApp::new();
     let router = app.router();
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
-    println!("🚀 Server running on http://127.0.0.1:3000");
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
+    println!("🚀 Server running on http://127.0.0.1:{}", port);
 
     axum::serve(listener, router).await?;
 
