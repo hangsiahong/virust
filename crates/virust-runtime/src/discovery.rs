@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use walkdir::WalkDir;
 
 pub struct RouteFile {
@@ -37,4 +38,28 @@ pub fn discover_routes(api_dir: &Path) -> Result<Vec<RouteFile>, std::io::Error>
     }
 
     Ok(route_files)
+}
+
+pub fn compile_routes(route_files: &[RouteFile]) -> Result<(), Box<dyn std::error::Error>> {
+    // Compile as test harness to trigger macro registration
+    for route_file in route_files {
+        let crate_dir = route_file.file_path.parent()
+            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "Invalid file path"))?;
+
+        // Run cargo check --test-harness on the file's directory
+        let output = Command::new("cargo")
+            .current_dir(crate_dir)
+            .args(["check", "--test-harness", "-q"])
+            .output()?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("Failed to compile {}: {}",
+                route_file.path,
+                stderr
+            ).into());
+        }
+    }
+
+    Ok(())
 }
