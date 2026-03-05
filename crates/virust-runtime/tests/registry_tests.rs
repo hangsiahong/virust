@@ -15,7 +15,10 @@ async fn test_register_http_route() {
     registry.register_http(
         "/api/test".to_string(),
         Arc::new(|_req: HttpRequest| {
-            HttpResponse::ok()
+            HttpResponse {
+                status: 200,
+                body: None,
+            }
         })
     );
 
