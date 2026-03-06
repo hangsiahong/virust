@@ -4,12 +4,15 @@ A **real-time Rust backend framework** optimized for AI-assisted development.
 
 ## Features
 
+- **Static Site Generation (SSG)** - Pre-render pages at build time with `#[ssg]` attribute
+- **Incremental Static Regeneration (ISR)** - Update static pages with `revalidate` parameter
 - **Server-Side Rendering** - Next.js-style SSR with Bun for React components
 - **React Server Components** - Async components with server-side data fetching
 - **Client Components** - Interactive components with React hooks
+- **HTTP Caching** - Add cache control with `#[cache]` attribute
 - **WebSocket-first** - Real-time bidirectional messaging with JSON-RPC
 - **Filesystem routing** - Next.js style: `api/chat/route.rs` → `/api/chat`
-- **Macro-powered** - `#[ws]`, `#[get]`, `#[post]`, `#[put]`, `#[delete]`, `#[render_component]`
+- **Macro-powered** - `#[ws]`, `#[get]`, `#[post]`, `#[put]`, `#[delete]`, `#[render_component]`, `#[ssg]`, `#[cache]`
 - **Type-safe** - Full TypeScript support for Rust and JavaScript
 - **Parameter extraction** - `#[path]` and `#[body]` attributes for clean syntax
 - **Auto-discovery** - Routes automatically discovered from `api/` directory
@@ -90,7 +93,14 @@ This starts a single server on port 3000 that serves:
 ### Production Build
 
 ```bash
+# Build server binary
 virust build --release
+
+# Build static site (SSG)
+virust build --ssg
+
+# Build static site with custom output
+virust build --ssg --output dist/
 ```
 
 ## Examples
@@ -234,6 +244,36 @@ export default async function HomePage() {
 
 See the [SSR Guide](docs/ssr-guide.md) for complete documentation on server-side rendering.
 
+### Static Site Generation (v0.5)
+
+```rust
+// api/blog/[slug]/route.rs
+use virust_macros::{get, ssg};
+use virust_runtime::RenderedHtml;
+
+#[get]
+#[ssg(revalidate = 3600)]  // Revalidate every hour
+pub async fn blog_post(#[path] slug: String) -> RenderedHtml {
+    RenderedHtml::new("BlogPost")
+}
+```
+
+Build your static site:
+
+```bash
+virust build --ssg --output dist/
+```
+
+This pre-renders all routes with `#[ssg]` to static HTML at build time, with optional incremental regeneration.
+
+**Benefits:**
+- Lightning-fast page loads (pre-rendered HTML)
+- Better SEO (fully rendered content)
+- CDN-friendly deployment
+- Update content without full rebuilds (with ISR)
+
+See the [SSG Guide](docs/ssg-guide.md) for complete documentation on static site generation.
+
 ## TypeScript Generation
 
 Virust automatically generates TypeScript interfaces for all your route handlers. Access them at:
@@ -295,7 +335,8 @@ virust/
 ├ crates/
 │ ├ virust-protocol     # Shared types (RPC, HTTP, errors)
 │ ├ virust-macros       # Proc macros + TS generation
-│ ├ virust-runtime      # WebSocket + HTTP servers + SSR
+│ ├ virust-runtime      # WebSocket + HTTP servers + SSR + ISR + caching
+│ ├ virust-build        # SSG build system + parallel rendering
 │ ├ virust-cli          # Project scaffolding (init, dev, build)
 │ ├ virust-typescript   # TypeScript code generation
 │ └ virust-bun          # Bun integration for SSR
@@ -341,8 +382,22 @@ The latest release includes:
 
 See [v0.4 Release Notes](docs/plans/2026-03-06-virust-v0.4-release.md) for details.
 
+## v0.5 Features
+
+The latest release includes powerful static site generation capabilities:
+
+- **Static Site Generation (SSG)**: Pre-render pages at build time with `#[ssg]`
+- **Incremental Static Regeneration (ISR)**: Update static pages with `revalidate` parameter
+- **HTTP Caching**: Add cache control to API routes with `#[cache]` attribute
+- **Parallel Builds**: Fast parallel rendering using multiple CPU cores
+- **Build Statistics**: Track build performance with detailed stats
+- **Hybrid Rendering**: Mix SSG, ISR, and SSR in the same application
+
+See [v0.5 Release Notes](docs/plans/2026-03-06-virust-v0.5-release.md) for details.
+
 ## Documentation
 
+- [SSG Guide](docs/ssg-guide.md) - Complete guide to static site generation and ISR
 - [SSR Guide](docs/ssr-guide.md) - Complete guide to server-side rendering
 - [v0.4 Release Notes](docs/plans/2026-03-06-virust-v0.4-release.md) - Latest release notes
 - [v0.3 Release Notes](docs/plans/2026-03-06-virust-v0.3-release.md) - Previous release notes
