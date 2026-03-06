@@ -2122,7 +2122,7 @@ dependencies = [
 
 [[package]]
 name = "virust-bun"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -2133,7 +2133,7 @@ dependencies = [
 
 [[package]]
 name = "virust-cli"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -2149,7 +2149,7 @@ dependencies = [
 
 [[package]]
 name = "virust-macros"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "axum",
  "inventory",
@@ -2168,7 +2168,7 @@ dependencies = [
 
 [[package]]
 name = "virust-protocol"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "async-trait",
  "futures",
@@ -2181,7 +2181,7 @@ dependencies = [
 
 [[package]]
 name = "virust-runtime"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2212,7 +2212,7 @@ dependencies = [
 
 [[package]]
 name = "virust-typescript"
-version = "0.1.0"
+version = "0.5.0"
 
 [[package]]
 name = "walkdir"
