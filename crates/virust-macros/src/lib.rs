@@ -83,15 +83,30 @@ fn parse_route_args(args: &Punctuated<FnArg, Comma>) -> Vec<RouteArg> {
                     attr.path().is_ident("body")
                 });
 
-                if let Pat::Ident(ident) = &*pat.pat {
+                // Extract the identifier name from the pattern
+                // Handle both simple patterns (id) and complex patterns (Json(id))
+                let ident = match &*pat.pat {
+                    Pat::Ident(ident) => Some(ident.ident.clone()),
+                    Pat::Type(pat_type) => {
+                        // Handle Type patterns like Json(id)
+                        if let Pat::Ident(inner) = &*pat_type.pat {
+                            Some(inner.ident.clone())
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                };
+
+                if let Some(name) = ident {
                     if is_path {
                         Some(RouteArg::Path(PathArg {
-                            name: ident.ident.clone(),
+                            name: name.clone(),
                             typ: (*pat.ty).clone(),
                         }))
                     } else if is_body {
                         Some(RouteArg::Body(BodyArg {
-                            name: ident.ident.clone(),
+                            name: name.clone(),
                             typ: (*pat.ty).clone(),
                         }))
                     } else {
