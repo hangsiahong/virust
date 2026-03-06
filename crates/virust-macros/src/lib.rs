@@ -73,73 +73,51 @@ fn parse_route_args(args: &Punctuated<FnArg, Comma>) -> Vec<RouteArg> {
     args.iter()
         .filter_map(|arg| {
             if let FnArg::Typed(pat) = arg {
-                // Debug: Print the raw pattern
-                eprintln!("DEBUG: Processing arg: {:?}", quote::quote!(#pat));
-                eprintln!("DEBUG: pat.pat = {:?}", pat.pat);
-                eprintln!("DEBUG: pat.attrs = {:?}", pat.attrs);
-
                 // Check for #[param] attribute (renamed from #[path] to avoid conflict with Rust builtin)
                 let is_path = pat.attrs.iter().any(|attr| {
-                    eprintln!("DEBUG: Checking attr: {:?} is_ident('param'): {}", attr.path(), attr.path().is_ident("param"));
                     attr.path().is_ident("param")
                 });
 
                 // Check for #[body] attribute
                 let is_body = pat.attrs.iter().any(|attr| {
-                    eprintln!("DEBUG: Checking attr: {:?} is_ident('body'): {}", attr.path(), attr.path().is_ident("body"));
                     attr.path().is_ident("body")
                 });
-
-                eprintln!("DEBUG: is_path={}, is_body={}", is_path, is_body);
 
                 // Extract the identifier name from the pattern
                 // Handle both simple patterns (id) and complex patterns (Json(id))
                 let ident = match &*pat.pat {
-                    Pat::Ident(ident) => {
-                        eprintln!("DEBUG: Pat::Ident found: {:?}", ident.ident);
-                        Some(ident.ident.clone())
-                    }
+                    Pat::Ident(ident) => Some(ident.ident.clone()),
                     Pat::Type(pat_type) => {
-                        eprintln!("DEBUG: Pat::Type found");
                         // Handle Type patterns like Json(id)
                         if let Pat::Ident(inner) = &*pat_type.pat {
-                            eprintln!("DEBUG: Inner Pat::Ident: {:?}", inner.ident);
                             Some(inner.ident.clone())
                         } else {
-                            eprintln!("DEBUG: Inner is not Pat::Ident");
                             None
                         }
                     }
                     Pat::TupleStruct(tuple_struct) => {
-                        eprintln!("DEBUG: Pat::TupleStruct found");
                         // Handle TupleStruct patterns like Json(update)
                         // Extract the identifier from the first element
                         if let Some(first_elem) = tuple_struct.elems.first() {
                             if let Pat::Ident(inner) = first_elem {
-                                eprintln!("DEBUG: TupleStruct first elem: {:?}", inner.ident);
                                 Some(inner.ident.clone())
                             } else {
-                                eprintln!("DEBUG: TupleStruct first elem is not Pat::Ident");
                                 None
                             }
                         } else {
-                            eprintln!("DEBUG: TupleStruct has no elements");
                             None
                         }
                     }
                     Pat::Verbatim(_) => {
-                        eprintln!("DEBUG: Pat::Verbatim found");
                         // Handle verbatim patterns by attempting to parse them
                         // This catches complex patterns we don't explicitly handle
                         // For now, we'll try to extract from the string representation
                         let pattern_str = quote::quote!(#pat).to_string();
-                        eprintln!("DEBUG: pattern_str = {}", pattern_str);
                         // Simple heuristic: look for the identifier after the last '('
                         if let Some(start) = pattern_str.rfind('(') {
                             let rest = &pattern_str[start + 1..];
                             if let Some(end) = rest.find(')') {
                                 let ident_str = &rest[..end];
-                                eprintln!("DEBUG: Trying to parse ident: {}", ident_str);
                                 if let Ok(ident) = syn::parse_str::<syn::Ident>(ident_str) {
                                     Some(ident)
                                 } else {
@@ -152,13 +130,8 @@ fn parse_route_args(args: &Punctuated<FnArg, Comma>) -> Vec<RouteArg> {
                             None
                         }
                     }
-                    _ => {
-                        eprintln!("DEBUG: Unknown pattern type");
-                        None
-                    }
+                    _ => None,
                 };
-
-                eprintln!("DEBUG: Extracted ident: {:?}", ident);
 
                 if let Some(name) = ident {
                     if is_path {
@@ -615,10 +588,6 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Parse route arguments to extract #[path] and #[body] metadata
     let route_args = parse_route_args(&input.sig.inputs);
-
-    // Debug: Print what we found
-    eprintln!("DEBUG: route_args = {:?}", route_args);
-    eprintln!("DEBUG: sig.inputs = {:?}", input.sig.inputs);
 
     // Filter for path parameters
     let path_params: Vec<_> = route_args.iter()
