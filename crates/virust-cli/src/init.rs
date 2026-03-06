@@ -325,7 +325,7 @@ pub fn register_routes(router: axum::Router) -> axum::Router {
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
-    // Create api/todos/route.rs
+    // Create api/todos.rs
     let todos_route = r#"use virust_macros::{get, post};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -389,8 +389,7 @@ async fn create_todo(#[body] input: CreateTodoRequest) -> String {
 "#;
     fs::write(project_dir.join("src/api/todos.rs"), todos_route)?;
 
-    // Create api/todos_id/route.rs for individual todo operations
-    fs::create_dir_all(project_dir.join("src/api/todos_id"))?;
+    // Create api/todos_id.rs for individual todo operations
     let todos_id_route = r#"use virust_macros::{get, put, delete};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -469,7 +468,7 @@ async fn delete_todo(#[path] id: String) -> String {
     }
 }
 "#;
-    fs::write(project_dir.join("src/api/todos_id/route.rs"), todos_id_route)?;
+    fs::write(project_dir.join("src/api/todos_id.rs"), todos_id_route)?;
 
     // Copy web files from template
     copy_template_files(project_dir, "todo")?;

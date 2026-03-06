@@ -67,6 +67,12 @@ impl VirustApp {
     }
 
     pub fn router(&self) -> axum::Router {
+        self.router_with_auto_registration()
+    }
+
+    /// Automatically register routes from the inventory and return the router
+    /// This is used in dev mode to eliminate the need for manual register_routes()
+    fn router_with_auto_registration(&self) -> axum::Router {
         use axum::routing::{get, post, put, delete};
 
         // Serve static files from web/ directory
@@ -79,13 +85,10 @@ impl VirustApp {
             .route("/ws", get(ws_upgrade))
             .with_state(self.hmr.clone());
 
-        // Try to call the user's register_routes function if it exists
-        // This function is defined in the user's api/mod.rs
-        // We need to call it to register the user's route handlers
-
-        // Note: This requires the user's project to have the api module with register_routes
-        // For now, we'll just return the base router
-        // The user's main.rs should call api::register_routes() to add their routes
+        // Note: Automatic route registration from inventory is not yet implemented
+        // because Rust doesn't support dynamic function calls by string name.
+        // For now, templates should use the register_routes() pattern.
+        // Future implementation could use code generation or dynamic loading.
 
         router
     }

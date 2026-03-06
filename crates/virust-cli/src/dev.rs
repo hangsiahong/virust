@@ -2,17 +2,18 @@ use anyhow::Result;
 
 pub async fn execute() -> Result<()> {
     println!("🚀 Starting Virust development server...");
+    println!("Compiling and running your project...");
 
-    let app = virust_runtime::VirustApp::new();
-    let router = app.router();
+    // Run the user's project with cargo
+    // The user's main.rs handles route registration via api::register_routes()
+    let mut child = tokio::process::Command::new("cargo")
+        .args(["run"])
+        .spawn()?;
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
-    println!("✨ Server running on http://127.0.0.1:3000");
-    println!("📁 Serving static files from web/");
-    println!("📡 API at /api/*");
-    println!("🔌 HMR WebSocket at /ws");
-
-    axum::serve(listener, router).await?;
+    let status = child.wait().await?;
+    if !status.success() {
+        anyhow::bail!("Cargo run failed with status: {}", status);
+    }
 
     Ok(())
 }
