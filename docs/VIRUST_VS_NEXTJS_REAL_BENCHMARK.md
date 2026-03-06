@@ -1,5 +1,22 @@
 # Virust v0.4 vs Next.js - REAL Benchmark Results
 
+## ⚠️ ⚠️ ⚠️ THIS BENCHMARK IS INCORRECT ⚠️ ⚠️ ⚠️
+
+**This document compared RAW AXUM (not Virust) to Next.js.**
+
+The benchmark apps used plain Axum code instead of the actual Virust framework:
+- ❌ Did NOT use `virust init`
+- ❌ Did NOT use `#[get]` macros
+- ❌ Did NOT use Virust templates or project structure
+- ❌ Was just raw Axum code labeled as "Virust"
+
+**For the CORRECT benchmark using the ACTUAL Virust framework, see:**
+→ **[VIRUST_VS_NEXTJS_REAL_BENCHMARK_FIXED.md](./VIRUST_VS_NEXTJS_REAL_BENCHMARK_FIXED.md)**
+
+The corrected benchmark shows Virust (with `#[get]` macros and real framework) is **17.7x faster** than Next.js.
+
+---
+
 **Date:** March 6, 2026
 **Test Machine:** AMD Ryzen AI 9 HX 370, 30GB RAM
 **Node.js:** v24.14.0

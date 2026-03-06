@@ -1,12 +1,27 @@
 # Virust v0.4 vs Next.js Performance Comparison
 
-## ⚠️ IMPORTANT NOTE
+## ⚠️ ⚠️ ⚠️ CRITICAL WARNING ⚠️ ⚠️ ⚠️
 
-**This document contains THEORETICAL projections.**
+**The original benchmark (VIRUST_VS_NEXTJS_REAL_BENCHMARK.md) compared RAW AXUM to Next.js - NOT the actual Virust framework!**
 
-For **REAL MEASURED BENCHMARK RESULTS**, see: [VIRUST_VS_NEXTJS_REAL_BENCHMARK.md](./VIRUST_VS_NEXTJS_REAL_BENCHMARK.md)
+For **CORRECT REAL MEASURED BENCHMARK RESULTS** using the ACTUAL Virust v0.4 framework (with `#[get]` macros, `virust init`, etc.), see:
+→ **[VIRUST_VS_NEXTJS_REAL_BENCHMARK_FIXED.md](./VIRUST_VS_NEXTJS_REAL_BENCHMARK_FIXED.md)**
 
-The real benchmarks were run on March 6, 2026 and measured actual performance. This document below represents initial expectations that were later validated through real testing.
+**What was wrong with the original benchmark:**
+- ❌ Used raw Axum code instead of Virust framework
+- ❌ Didn't use `virust init` or Virust templates
+- ❌ Didn't use `#[get]` macros or Virust project structure
+- ❌ Misleading - proved Axum is fast, not Virust
+
+**The CORRECTED benchmark shows:**
+- ✅ Uses actual Virust framework (`virust init`, `#[get]` macros)
+- ✅ **17.7x higher throughput** than Next.js (111,482 vs 6,295 req/s)
+- ✅ **107x lower latency** than Next.js (0.01ms vs 1.07ms)
+- ✅ Zero macro overhead - Virust macros are as fast as raw Axum
+
+---
+
+**This document below contains THEORETICAL projections.**
 
 ---
 
