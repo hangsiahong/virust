@@ -566,16 +566,38 @@ pub fn register_routes(router: axum::Router) -> axum::Router {
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
     // Create api/route.rs with SSR implementation
-    let route_rs = r#"use virust_macros::{get, render_component};
+    let route_rs = r##"use axum::response::Html;
+use virust_macros::get;
 use virust_runtime::RenderedHtml;
 
 /// Home page with server-side rendering
 #[get]
-#[render_component("HomePage")]
-pub async fn home() -> RenderedHtml {
-    RenderedHtml::new("HomePage")
+pub async fn home() -> Html<String> {
+    let rendered = RenderedHtml::new("HomePage");
+
+    // Render the component to HTML
+    match rendered.render().await {
+        Ok(html) => Html(html),
+        Err(e) => {
+            // Log the error
+            eprintln!("SSR Error: {}", e);
+
+            // Return a simple error page
+            Html(format!(
+                r#"<!DOCTYPE html>
+<html>
+<head><title>Error</title></head>
+<body>
+    <h1>SSR Error</h1>
+    <p>{}</p>
+</body>
+</html>"#,
+                e.to_string()
+            ))
+        }
+    }
 }
-"#;
+"##;
     fs::write(project_dir.join("src/api/route.rs"), route_rs)?;
 
     // Create web/components directory
@@ -715,9 +737,9 @@ export default async function HomePage() {
 "#;
     fs::write(project_dir.join("web/main.js"), main_js)?;
 
-    // Create web/package.json for React dependencies
+    // Create package.json for React dependencies (in root so Bun can find them)
     let package_json = r#"{
-  "name": "ssr-blog-frontend",
+  "name": "ssr-blog",
   "private": true,
   "dependencies": {
     "react": "^18.2.0",
@@ -725,7 +747,7 @@ export default async function HomePage() {
   }
 }
 "#;
-    fs::write(project_dir.join("web/package.json"), package_json)?;
+    fs::write(project_dir.join("package.json"), package_json)?;
 
     Ok(())
 }
@@ -744,20 +766,21 @@ pub fn register_routes(router: axum::Router) -> axum::Router {
     use axum::routing::get;
 
     // Register dashboard route with SSR and data passing
-    router.route("/", get(route::dashboard_wrapper))
+    // Use /dashboard prefix to avoid conflict with /__types route
+    router.route("/dashboard", get(route::dashboard))
 }
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
     // Create api/route.rs with SSR implementation
-    let route_rs = r#"use virust_macros::{get, render_component};
+    let route_rs = r##"use axum::response::Html;
+use virust_macros::get;
 use virust_runtime::RenderedHtml;
 use serde_json::json;
 
 /// Dashboard page with server-side rendering and data
 #[get]
-#[render_component("Dashboard")]
-pub async fn dashboard() -> RenderedHtml {
+pub async fn dashboard() -> Html<String> {
     // In a real app, you might fetch this data from a database
     let stats = json!({
         "totalUsers": 1250,
@@ -766,9 +789,31 @@ pub async fn dashboard() -> RenderedHtml {
         "conversionRate": 3.2
     });
 
-    RenderedHtml::with_props("Dashboard", stats)
+    let rendered = RenderedHtml::with_props("Dashboard", stats);
+
+    // Render the component to HTML
+    match rendered.render().await {
+        Ok(html) => Html(html),
+        Err(e) => {
+            // Log the error
+            eprintln!("SSR Error: {}", e);
+
+            // Return a simple error page
+            Html(format!(
+                r#"<!DOCTYPE html>
+<html>
+<head><title>Error</title></head>
+<body>
+    <h1>SSR Error</h1>
+    <p>{}</p>
+</body>
+</html>"#,
+                e.to_string()
+            ))
+        }
+    }
 }
-"#;
+"##;
     fs::write(project_dir.join("src/api/route.rs"), route_rs)?;
 
     // Create web/components directory
@@ -1007,9 +1052,9 @@ export default function RefreshButton() {
 "#;
     fs::write(project_dir.join("web/main.js"), main_js)?;
 
-    // Create web/package.json for React dependencies
+    // Create package.json for React dependencies (in root so Bun can find them)
     let package_json = r#"{
-  "name": "ssr-dashboard-frontend",
+  "name": "ssr-dashboard",
   "private": true,
   "dependencies": {
     "react": "^18.2.0",
@@ -1017,7 +1062,7 @@ export default function RefreshButton() {
   }
 }
 "#;
-    fs::write(project_dir.join("web/package.json"), package_json)?;
+    fs::write(project_dir.join("package.json"), package_json)?;
 
     Ok(())
 }
