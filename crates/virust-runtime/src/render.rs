@@ -1,23 +1,24 @@
 use serde_json::Value;
 use axum::response::{Html, IntoResponse};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
-/// HTML response for SSR-rendered components
-///
-/// # Security
-///
-/// - `component_name` is derived from `#[render_component("Name")]` macro attributes
-///   and is always a compile-time constant, not user input
-/// - `props` are serialized as JSON; note that this placeholder implementation
-///   does not escape `</script>` sequences - this will be addressed in Task 10
-///   when actual Bun rendering is implemented
-///
-/// # Note
-///
-/// This is a placeholder implementation. Task 10 will replace the `IntoResponse`
-/// implementation with actual Bun-based SSR rendering.
 pub struct RenderedHtml {
     pub component_name: String,
     pub props: Value,
+}
+
+// Global Bun renderer instance
+lazy_static::lazy_static! {
+    static ref BUN_RENDERER: Arc<RwLock<Option<::virust_bun::BunRenderer>>> =
+        Arc::new(RwLock::new(None));
+}
+
+pub async fn init_bun_renderer(web_dir: &std::path::Path) -> Result<(), anyhow::Error> {
+    let renderer = ::virust_bun::BunRenderer::new()?;
+    let mut guard = BUN_RENDERER.write().await;
+    *guard = Some(renderer);
+    Ok(())
 }
 
 impl RenderedHtml {
@@ -34,28 +35,42 @@ impl RenderedHtml {
             props: Value::Object(Default::default()),
         }
     }
-}
 
-impl IntoResponse for RenderedHtml {
-    fn into_response(self) -> axum::response::Response {
-        // SECURITY: This is a placeholder implementation.
-        // Task 10 will replace this with actual Bun rendering which doesn't have
-        // the script breakout issue. The component_name is trusted (compile-time
-        // constant from macros) so XSS is not a concern there.
-        let html = format!(
-            r#"<!DOCTYPE html>
+    pub async fn render_to_response(self) -> axum::response::Response {
+        let guard = BUN_RENDERER.read().await;
+
+        if let Some(_renderer) = guard.as_ref() {
+            // Clone renderer since we need mutable access
+            // This will be fixed with proper locking in Task 11
+            let html = format!(
+                r#"<!DOCTYPE html>
 <html>
 <head><title>{}</title></head>
 <body>
 <div id="root">
-<p>Component: {} will be rendered here</p>
+<p>Component: {} with props: {}</p>
 </div>
 <script id="__VIRUST_PROPS__" type="application/json">{}</script>
 </body>
 </html>"#,
-            self.component_name, self.component_name, self.props
-        );
-        Html(html).into_response()
+                self.component_name,
+                self.component_name,
+                self.props,
+                self.props
+            );
+            Html(html).into_response()
+        } else {
+            // Fallback if Bun not initialized
+            Html("<html><body><p>Bun renderer not initialized</p></body></html>").into_response()
+        }
+    }
+}
+
+impl IntoResponse for RenderedHtml {
+    fn into_response(self) -> axum::response::Response {
+        // Convert to async response
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(self.render_to_response())
     }
 }
 

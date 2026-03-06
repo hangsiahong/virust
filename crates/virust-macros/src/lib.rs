@@ -935,20 +935,37 @@ pub fn render_component(attr: TokenStream, item: TokenStream) -> TokenStream {
     // Strip #[path] and #[body] attributes from function parameters
     let original_fn = strip_arg_attributes(input.clone());
 
-    // Extract parameters for metadata collection (placeholder for Task 10)
-    let _route_args = parse_route_args(&input.sig.inputs);
+    // Extract parameters for props building
+    let route_args = parse_route_args(&input.sig.inputs);
+
+    // Filter for path parameters to build props
+    let path_params: Vec<_> = route_args.iter()
+        .filter_map(|arg| match arg {
+            RouteArg::Path(p) => Some(p),
+            _ => None,
+        })
+        .collect();
+
+    // Generate props building code from path parameters
+    let props_building: Vec<_> = path_params.iter()
+        .map(|param| {
+            let name = &param.name;
+            quote! {
+                props[#name] = serde_json::to_value(#name.clone()).unwrap();
+            }
+        })
+        .collect();
 
     // Generate wrapper function
     let expanded = quote! {
         #original_fn
 
-        pub fn #wrapper_ident(__virust_bun: &::virust_bun::BunRenderer) -> impl axum::response::IntoResponse {
+        pub fn #wrapper_ident(#(#path_params),*) -> impl axum::response::IntoResponse {
             use ::virust_runtime::RenderedHtml;
-            use ::serde_json::json;
 
             let mut props = ::serde_json::json!({});
+            #(#props_building)*
 
-            // This is a placeholder - will be completed in Task 10
             RenderedHtml::with_props(#component_name, props)
         }
     };

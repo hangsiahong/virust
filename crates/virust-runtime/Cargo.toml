@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 virust-protocol = { path = "../virust-protocol" }
+virust-bun = { path = "../virust-bun" }
 axum = { version = "0.7", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }
@@ -24,6 +25,7 @@ async-trait = "0.1"
 uuid = { version = "1.0", features = ["v4"] }
 syn = { version = "2", features = ["full", "extra-traits"] }
 quote = "1"
+lazy_static = "1.4"
 
 [dev-dependencies]
 tempfile = "3"
