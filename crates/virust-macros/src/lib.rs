@@ -164,12 +164,14 @@ pub fn ws(_attr: TokenStream, item: TokenStream) -> TokenStream {
         // Get the return type from the original function
         let return_type = &original_fn.sig.output;
 
+        let vis = &input.vis;
+
         quote! {
             // Original function (stripped of attributes)
             #original_fn
 
             // Extractor wrapper for WebSocket
-            async fn #wrapper_ident(
+            #vis async fn #wrapper_ident(
                 #body_name: #body_typ
             ) #return_type {
                 #fn_name(#body_name).await

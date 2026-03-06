@@ -146,7 +146,6 @@ pub fn register_routes(router: axum::Router) -> axum::Router {
 
     // Create example route
     let route_rs = r#"use virust_macros::post;
-use virust_macros::body;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
