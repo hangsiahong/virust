@@ -559,7 +559,8 @@ pub fn register_routes(router: axum::Router) -> axum::Router {
     use axum::routing::get;
 
     // Register home page route with SSR
-    router.route("/", get(route::home_wrapper))
+    // Note: home() returns RenderedHtml, so we use it directly without _wrapper suffix
+    router.route("/", get(route::home))
 }
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
