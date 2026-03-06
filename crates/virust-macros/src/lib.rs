@@ -917,3 +917,41 @@ pub fn body(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // and extract parameter metadata
     item
 }
+
+#[proc_macro_attribute]
+pub fn render_component(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(item as ItemFn);
+
+    // Parse component name from attribute
+    let attr_string = attr.to_string();
+    let component_name = attr_string
+        .trim_matches('"')
+        .to_string();
+
+    let fn_name = &input.sig.ident;
+    let wrapper_name = format!("{}_wrapper", fn_name);
+    let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
+
+    // Strip #[path] and #[body] attributes from function parameters
+    let original_fn = strip_arg_attributes(input.clone());
+
+    // Extract parameters for metadata collection (placeholder for Task 10)
+    let _route_args = parse_route_args(&input.sig.inputs);
+
+    // Generate wrapper function
+    let expanded = quote! {
+        #original_fn
+
+        pub fn #wrapper_ident(__virust_bun: &::virust_bun::BunRenderer) -> impl axum::response::IntoResponse {
+            use ::virust_runtime::RenderedHtml;
+            use ::serde_json::json;
+
+            let mut props = ::serde_json::json!({});
+
+            // This is a placeholder - will be completed in Task 10
+            RenderedHtml::with_props(#component_name, props)
+        }
+    };
+
+    TokenStream::from(expanded)
+}

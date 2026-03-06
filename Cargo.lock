@@ -1736,6 +1736,7 @@ dependencies = [
  "anyhow",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 
@@ -1764,6 +1765,7 @@ dependencies = [
  "syn",
  "tokio",
  "trybuild",
+ "virust-bun",
  "virust-runtime",
  "virust-typescript",
 ]
