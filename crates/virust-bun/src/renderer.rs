@@ -23,9 +23,23 @@ pub struct BunRenderer {
 impl BunRenderer {
     /// Create a new BunRenderer by spawning a Bun process
     ///
-    /// This spawns `bun run /opt/virust/bun/renderer.js` with piped stdin/stdout
-    /// for communication with the Bun renderer process.
+    /// This looks for the renderer in:
+    /// 1. VIRUST_BUN_PATH environment variable
+    /// 2. .virust/renderer.js in current directory
+    /// 3. /opt/virust/bun/renderer.js (system installation)
     pub fn new() -> Result<Self> {
+        // Check VIRUST_BUN_PATH environment variable first
+        if let Ok(path) = std::env::var("VIRUST_BUN_PATH") {
+            return Self::with_path(&path);
+        }
+
+        // Check for .virust/renderer.js in current directory
+        let local_path = ".virust/renderer.js";
+        if Path::new(local_path).exists() {
+            return Self::with_path(local_path);
+        }
+
+        // Fall back to system path
         Self::with_path("/opt/virust/bun/renderer.js")
     }
 

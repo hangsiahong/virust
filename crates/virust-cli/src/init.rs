@@ -10,41 +10,40 @@ pub fn execute(name: &str, template: &str) -> Result<()> {
         anyhow::bail!("Directory '{}' already exists", name);
     }
 
-    // Get virust workspace path for path dependencies
-    let virust_path_absolute = if let Ok(path) = std::env::var("VIRUST_PATH") {
-        path
-    } else {
-        // Default to absolute path of virust workspace (based on binary location)
-        // Binary is at target/release/virust, so go up 3 levels to get to repo root
-        env::current_exe()
-            .ok()
-            .and_then(|exe_path| exe_path.canonicalize().ok())
-            .and_then(|exe_path| {
-                exe_path.parent()
-                    .and_then(|parent| parent.parent())
-                    .and_then(|parent| parent.parent())
-                    .map(|p| p.to_path_buf())
-            })
-            .and_then(|path| path.to_str().map(|s| s.to_string()))
-            .unwrap_or_else(|| ".".to_string())
-    };
+    // Check if user has VIRUST_PATH set (for development)
+    let use_path_deps = std::env::var("VIRUST_PATH").is_ok();
 
     // Create project structure
     fs::create_dir_all(project_dir.join("src"))?;
     fs::create_dir_all(project_dir.join("src/api"))?;
     fs::create_dir_all(project_dir.join("web"))?;
 
-    // Create Cargo.toml with path dependencies for local development
+    // Create Cargo.toml with git dependencies (or path for development)
+    let dependencies = if use_path_deps {
+        // Development mode: use path dependencies
+        let virust_path = std::env::var("VIRUST_PATH").unwrap();
+        format!(
+            r#"[dependencies]
+virust-runtime = {{ path = "{}/crates/virust-runtime" }}
+virust-macros = {{ path = "{}/crates/virust-macros" }}
+virust-protocol = {{ path = "{}/crates/virust-protocol" }}"#,
+            virust_path, virust_path, virust_path
+        )
+    } else {
+        // Production mode: use git dependencies
+        r#"[dependencies]
+virust-runtime = { git = "https://github.com/hangsiahong/virust.git", branch = "master" }
+virust-macros = { git = "https://github.com/hangsiahong/virust.git", branch = "master" }
+virust-protocol = { git = "https://github.com/hangsiahong/virust.git", branch = "master" }"#.to_string()
+    };
+
     let cargo_toml = format!(
         r#"[package]
 name = "{}"
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
-virust-runtime = {{ path = "{}" }}
-virust-macros = {{ path = "{}" }}
-virust-protocol = {{ path = "{}" }}
+{}
 serde = {{ version = "1", features = ["derive"] }}
 serde_json = "1"
 tokio = {{ version = "1", features = ["full"] }}
@@ -55,10 +54,7 @@ lazy_static = "1.4"
 chrono = "0.4"
 uuid = {{ version = "1.0", features = ["v4"] }}
 "#,
-        name,
-        format!("{}/crates/virust-runtime", virust_path_absolute),
-        format!("{}/crates/virust-macros", virust_path_absolute),
-        format!("{}/crates/virust-protocol", virust_path_absolute),
+        name, dependencies
     );
     fs::write(project_dir.join("Cargo.toml"), cargo_toml)?;
 
@@ -121,9 +117,11 @@ async fn main() -> anyhow::Result<()> {{
     println!("Next steps:");
     println!("  cd {}", name);
     println!("  virust dev  # Start server on http://127.0.0.1:3000");
-    println!();
-    println!("Note: This project uses path dependencies to the local virust workspace.");
-    println!("      Set VIRUST_PATH environment variable if the virust crates are in a custom location.");
+    if use_path_deps {
+        println!();
+        println!("Note: This project uses path dependencies to the local virust workspace.");
+        println!("      Set VIRUST_PATH environment variable if the virust crates are in a custom location.");
+    }
 
     Ok(())
 }
