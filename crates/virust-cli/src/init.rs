@@ -10,6 +10,12 @@ pub fn execute(name: &str, template: &str) -> Result<()> {
         anyhow::bail!("Directory '{}' already exists", name);
     }
 
+    // Extract crate name from path (basename)
+    let crate_name = project_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(name);
+
     // Check if user has VIRUST_PATH set (for development)
     let use_path_deps = std::env::var("VIRUST_PATH").is_ok();
 
@@ -54,7 +60,7 @@ lazy_static = "1.4"
 chrono = "0.4"
 uuid = {{ version = "1.0", features = ["v4"] }}
 "#,
-        name, dependencies
+        crate_name, dependencies
     );
     fs::write(project_dir.join("Cargo.toml"), cargo_toml)?;
 
@@ -96,7 +102,7 @@ async fn main() -> anyhow::Result<()> {{
     Ok(())
 }}
 "#,
-        project_name = name.replace("-", "_")
+        project_name = crate_name.replace("-", "_")
     );
     fs::write(project_dir.join("src/main.rs"), main_rs)?;
 
@@ -1112,7 +1118,7 @@ export default function RefreshButton() {
 }
 
 fn setup_fullstack_todo_template(project_dir: &Path) -> Result<()> {
-    // Create .virust directory for SSR infrastructure
+    // Create .virust directory and copy Bun renderer files
     fs::create_dir_all(project_dir.join(".virust"))?;
 
     // Include the bundled renderer files
@@ -1120,7 +1126,7 @@ fn setup_fullstack_todo_template(project_dir: &Path) -> Result<()> {
     fs::write(project_dir.join(".virust/client.js"), include_str!("../../virust-bun/bundled/client.js"))?;
     fs::write(project_dir.join(".virust/package.json"), include_str!("../../virust-bun/bundled/package.json"))?;
 
-    // Create package.json in project root for JSX resolution
+    // Create package.json in project root for React dependencies
     let root_package_json = r#"{
   "name": "virust-fullstack-todo",
   "version": "0.1.0",
@@ -1133,48 +1139,87 @@ fn setup_fullstack_todo_template(project_dir: &Path) -> Result<()> {
 "#;
     fs::write(project_dir.join("package.json"), root_package_json)?;
 
-    // Create lib.rs with multiple API modules
+    // Create lib.rs
     let lib_rs = r#"pub mod api;
 "#;
     fs::write(project_dir.join("src/lib.rs"), lib_rs)?;
 
+    // Create main.rs
+    let main_rs = r#"use virust_runtime::VirustApp;
+use std::env;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let args: Vec<String> = env::args().collect();
+    let port = args.iter()
+        .position(|x| x == "--port")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(3000);
+
+    let app = VirustApp::new();
+    let router = app.router();
+
+    // Register user routes from the api module
+    let router = crate::api::register_routes(router);
+
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
+    println!("🚀 Server running on http://127.0.0.1:{}", port);
+
+    axum::serve(listener, router).await?;
+
+    Ok(())
+}
+"#;
+    fs::write(project_dir.join("src/main.rs"), main_rs)?;
+
     // Create api directory
     fs::create_dir_all(project_dir.join("src/api"))?;
 
-    // Create api/mod.rs to declare submodules
+    // Create api/mod.rs with proper route registration
     let api_mod = r#"pub mod todos;
 
 use axum::Router;
-use virust_runtime::VirustApp;
 
 /// Register all API routes with the router
 pub fn register_routes(router: Router) -> Router {
-    // Routes are auto-registered from todos module via inventory
+    // Simple approach: use the functions directly with Axum's built-in extractors
     router
+        .route("/api/todos", axum::routing::get(todos::route::get_todos))
+        .route("/api/todos", axum::routing::post(todos::route::create_todo))
+        .route("/api/todos/list", axum::routing::get(todos::route::list_todos))
+        .route("/api/todos/:id", axum::routing::get(todos::id_route::get_todo))
+        .route("/api/todos/:id", axum::routing::put(todos::id_route::update_todo))
+        .route("/api/todos/:id", axum::routing::delete(todos::id_route::delete_todo))
 }
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
-    // Create todos directory first
+    // Create todos directory
     fs::create_dir_all(project_dir.join("src/api/todos"))?;
 
-    // Create todos/mod.rs to declare submodules
+    // Create todos/mod.rs
     let todos_mod = r#"pub mod route;
 
 // Dynamic routes: use #[path] to reference [id] directory
 #[path = "[id]/route.rs"]
-mod id_route;
-pub use id_route::*;
+pub mod id_route;
+
+// Export the original functions
+pub use route::{get_todos, list_todos, create_todo, TodoResponse, CreateTodoRequest};
+pub use id_route::{get_todo, update_todo, delete_todo, UpdateTodoRequest};
 "#;
     fs::write(project_dir.join("src/api/todos/mod.rs"), todos_mod)?;
 
-    // Create todos/route.rs
+    // Create todos/route.rs with in-memory storage and get_todos endpoint
     let todos_route = r#"use axum::{response::Html, Json};
 use virust_macros::{get, post};
 use virust_runtime::RenderedHtml;
 use serde::{Serialize, Deserialize};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct TodoResponse {
     pub id: String,
     pub title: String,
@@ -1189,6 +1234,25 @@ pub struct CreateTodoRequest {
     pub description: Option<String>,
 }
 
+// In-memory todo storage
+type TodoStore = Arc<RwLock<Vec<TodoResponse>>>;
+
+pub fn get_todo_store() -> TodoStore {
+    use std::sync::OnceLock;
+    static STORE: OnceLock<TodoStore> = OnceLock::new();
+    STORE.get_or_init(|| {
+        Arc::new(RwLock::new(Vec::new()))
+    }).clone()
+}
+
+/// Get list of todos as JSON (API endpoint)
+#[get]
+pub async fn get_todos() -> Json<Vec<TodoResponse>> {
+    let store = get_todo_store();
+    let todos = store.read().await;
+    Json(todos.clone())
+}
+
 /// Todo list page with server-side rendering
 #[get]
 pub async fn list_todos() -> Html<String> {
@@ -1199,7 +1263,7 @@ pub async fn list_todos() -> Html<String> {
         Err(e) => {
             eprintln!("SSR Error: {}", e);
             Html(format!(
-                "<!DOCTYPE html>\n<html>\n<head><title>Error</title></head>\n<body>\n    <h1>SSR Error</h1>\n    <p>{}</p>\n</body>\n</html>",
+                "<!DOCTYPE html>\\n<html>\\n<head><title>Error</title></head>\\n<body>\\n    <h1>SSR Error</h1>\\n    <p>{}</p>\\n</body>\\n</html>",
                 e.to_string()
             ))
         }
@@ -1209,10 +1273,9 @@ pub async fn list_todos() -> Html<String> {
 /// Create new todo endpoint
 #[post]
 pub async fn create_todo(
-    #[body]
     Json(input): Json<CreateTodoRequest>,
 ) -> Json<TodoResponse> {
-    Json(TodoResponse {
+    let new_todo = TodoResponse {
         id: uuid::Uuid::new_v4().to_string(),
         title: input.title,
         description: input.description,
@@ -1221,7 +1284,13 @@ pub async fn create_todo(
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs(),
-    })
+    };
+
+    let store = get_todo_store();
+    let mut todos = store.write().await;
+    todos.push(new_todo.clone());
+
+    Json(new_todo)
 }
 "#;
     fs::write(project_dir.join("src/api/todos/route.rs"), todos_route)?;
@@ -1229,19 +1298,13 @@ pub async fn create_todo(
     // Create todos/[id]/route.rs for dynamic routes
     fs::create_dir_all(project_dir.join("src/api/todos/[id]"))?;
 
-    let todo_id_route = r#"use axum::{response::Html, Json};
+    let todo_id_route = r#"use axum::{response::Html, Json, extract::Path as AxumPath};
 use virust_macros::{get, put, delete};
 use virust_runtime::RenderedHtml;
-use serde::{Serialize, Deserialize};
+use serde::Deserialize;
 
-#[derive(Serialize)]
-pub struct TodoResponse {
-    pub id: String,
-    pub title: String,
-    pub description: Option<String>,
-    pub completed: bool,
-    pub created_at: u64,
-}
+// Re-export types and helper from parent module
+pub use crate::api::todos::route::{TodoResponse, get_todo_store};
 
 #[derive(Deserialize)]
 pub struct UpdateTodoRequest {
@@ -1253,7 +1316,7 @@ pub struct UpdateTodoRequest {
 /// Individual todo page with server-side rendering
 #[get]
 pub async fn get_todo(
-    #[param] id: String,
+    AxumPath(id): AxumPath<String>,
 ) -> Html<String> {
     let rendered = RenderedHtml::with_props("TodoDetail", serde_json::json!({"id": id}));
 
@@ -1262,7 +1325,7 @@ pub async fn get_todo(
         Err(e) => {
             eprintln!("SSR Error: {}", e);
             Html(format!(
-                "<!DOCTYPE html>\n<html>\n<head><title>Error</title></head>\n<body>\n    <h1>SSR Error</h1>\n    <p>{}</p>\n</body>\n</html>",
+                "<!DOCTYPE html>\\n<html>\\n<head><title>Error</title></head>\\n<body>\\n    <h1>SSR Error</h1>\\n    <p>{}</p>\\n</body>\\n</html>",
                 e.to_string()
             ))
         }
@@ -1272,37 +1335,49 @@ pub async fn get_todo(
 /// Update todo endpoint
 #[put]
 pub async fn update_todo(
-    #[param] id: String,
-    #[body]
+    AxumPath(id): AxumPath<String>,
     Json(update): Json<UpdateTodoRequest>,
-) -> Json<TodoResponse> {
-    // Update logic would go here
-    Json(TodoResponse {
-        id: id.clone(),
-        title: update.title,
-        description: update.description,
-        completed: update.completed.unwrap_or(false),
-        created_at: 0,
-    })
+) -> Json<Option<TodoResponse>> {
+    let store = get_todo_store();
+    let mut todos = store.write().await;
+
+    if let Some(todo) = todos.iter_mut().find(|t| t.id == id) {
+        todo.title = update.title;
+        todo.description = update.description;
+        if let Some(completed) = update.completed {
+            todo.completed = completed;
+        }
+        return Json(Some(todo.clone()));
+    } else {
+        return Json(None);
+    }
 }
 
 /// Delete todo endpoint
 #[delete]
-pub async fn delete_todo(#[param] id: String) -> Json<serde_json::Value> {
-    // Delete logic would go here
-    Json(serde_json::json!({"success": true, "id": id}))
+pub async fn delete_todo(AxumPath(id): AxumPath<String>) -> Json<serde_json::Value> {
+    let store = get_todo_store();
+    let mut todos = store.write().await;
+
+    let original_len = todos.len();
+    todos.retain(|todo| todo.id != id);
+    let deleted = todos.len() < original_len;
+
+    Json(serde_json::json!({
+        "success": deleted,
+        "id": id
+    }))
 }
 "#;
     fs::write(project_dir.join("src/api/todos/[id]/route.rs"), todo_id_route)?;
 
-    // Create web/components directory with TypeScript/TSX components
+    // Create web/components directory with sample components
     fs::create_dir_all(project_dir.join("web/components"))?;
 
-    // TodoList.tsx - Server component with TypeScript and Tailwind
+    // Create a simple TodoList.tsx component (for SSR demonstration)
     let todo_list = r#"// TodoList.tsx - Server component for displaying todo list
 import TodoItem from './TodoItem';
 import AddTodoForm from './AddTodoForm';
-import { loadTodos } from './utils';
 
 interface Todo {
   id: string;
@@ -1314,7 +1389,7 @@ interface Todo {
 
 export default function TodoList(): JSX.Element {
   // This is rendered on the server with data
-  const todos: Todo[] = await loadTodos();
+  const todos: Todo[] = [];
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-10 font-sans">
@@ -1353,8 +1428,9 @@ export default function TodoList(): JSX.Element {
   );
 }
 "#;
+    fs::write(project_dir.join("web/components/TodoList.tsx"), todo_list)?;
 
-    // TodoItem.tsx - Server component with TypeScript
+    // Create a simple TodoItem component
     let todo_item = r#"// TodoItem.tsx - Server component for todo item
 import DeleteButton from './DeleteButton';
 
@@ -1394,8 +1470,9 @@ export default function TodoItem({ todo }: TodoItemProps): JSX.Element {
   );
 }
 "#;
+    fs::write(project_dir.join("web/components/TodoItem.tsx"), todo_item)?;
 
-    // AddTodoForm.tsx - Client component with TypeScript and Tailwind
+    // Create AddTodoForm component
     let add_todo_form = r#"'use client';
 
 import { useState, FormEvent } from 'react';
@@ -1405,7 +1482,11 @@ interface CreateTodoRequest {
   description?: string;
 }
 
-export default function AddTodoForm(): JSX.Element {
+interface AddTodoFormProps {
+  onAddTodo: (title: string, description: string) => void;
+}
+
+export default function AddTodoForm({ onAddTodo }: AddTodoFormProps): JSX.Element {
   const [title, setTitle] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -1429,10 +1510,9 @@ export default function AddTodoForm(): JSX.Element {
       });
 
       if (response.ok) {
+        onAddTodo(title.trim(), description.trim());
         setTitle('');
         setDescription('');
-        // Reload page to show new todo
-        window.location.reload();
       }
     } catch (error) {
       console.error('Failed to create todo:', error);
@@ -1489,8 +1569,9 @@ export default function AddTodoForm(): JSX.Element {
   );
 }
 "#;
+    fs::write(project_dir.join("web/components/AddTodoForm.tsx"), add_todo_form)?;
 
-    // DeleteButton.tsx - Client component with TypeScript
+    // Create DeleteButton component
     let delete_button = r#"'use client';
 
 import { useState } from 'react';
@@ -1539,199 +1620,9 @@ export default function DeleteButton({ todoId }: DeleteButtonProps): JSX.Element
   );
 }
 "#;
-
-    // TodoDetail.tsx - Server component with TypeScript
-    let todo_detail = r#"// TodoDetail.tsx - Server component for todo detail page
-import { loadTodo } from './utils';
-
-interface Todo {
-  id: string;
-  title: string;
-  description: string | null;
-  completed: boolean;
-  created_at: number;
-}
-
-interface TodoDetailProps {
-  id: string;
-}
-
-export default function TodoDetail({ id }: TodoDetailProps): JSX.Element {
-  // Fetch todo data on server
-  const todo: Todo | null = await loadTodo(id);
-
-  if (!todo) {
-    return (
-      <div className="px-10 text-center text-gray-500 py-16">
-        <h1 className="text-3xl font-bold mb-4">Todo not found</h1>
-        <p>The todo you're looking for doesn't exist.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-10 font-sans">
-      <nav className="mb-8">
-        <a
-          href="/"
-          className="text-purple-600 hover:text-purple-700 underline font-medium"
-        >
-          ← Back to Todos
-        </a>
-      </nav>
-
-      <div className="bg-white p-8 rounded-lg shadow-md">
-        <h1 className="text-4xl mb-5 text-gray-800">
-          {todo.title}
-        </h1>
-
-        {todo.description && (
-          <p className="text-lg text-gray-600 leading-relaxed mb-5">
-            {todo.description}
-          </p>
-        )}
-
-        <div className="flex gap-5 py-5 border-t border-gray-200">
-          <div>
-            <strong>Status:</strong>{' '}
-            <span className={todo.completed ? 'text-green-600' : 'text-yellow-600'}>
-              {todo.completed ? '✓ Completed' : '○ Pending'}
-            </span>
-          </div>
-          <div>
-            <strong>Created:</strong> {new Date(todo.created_at * 1000).toLocaleDateString()}
-          </div>
-        </div>
-
-        <div className="mt-5 p-5 bg-gray-50 rounded-md">
-          <h3 className="text-lg mb-2 text-gray-700">
-            Actions
-          </h3>
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium cursor-pointer transition-colors"
-          >
-            🔄 Refresh
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-"#;
-
-    // utils.ts - Utility functions with TypeScript
-    let utils = r#"// utils.ts - Utility functions for data fetching and type definitions
-
-// Type definitions
-export interface Todo {
-  id: string;
-  title: string;
-  description: string | null;
-  completed: boolean;
-  created_at: number;
-}
-
-// Mock data - in production, replace with actual API calls
-export async function loadTodos(): Promise<Todo[]> {
-  // In production, fetch from API: const response = await fetch('/api/todos');
-  // For now, return sample data
-  return [
-    {
-      id: '1',
-      title: 'Learn Virust SSR',
-      description: 'Understand how server-side rendering works with Rust and Bun',
-      completed: true,
-      created_at: Math.floor(Date.now() / 1000) - 86400,
-    },
-    {
-      id: '2',
-      title: 'Build a full-stack app',
-      description: 'Create a todo app with TypeScript and Tailwind CSS',
-      completed: false,
-      created_at: Math.floor(Date.now() / 1000),
-    },
-  ];
-}
-
-export async function loadTodo(id: string): Promise<Todo | null> {
-  // In production, fetch from API: const response = await fetch(`/api/todos/${id}`);
-  // For now, return sample data
-  const todos = await loadTodos();
-  return todos.find(todo => todo.id === id) || null;
-}
-"#;
-
-    // Write all component files
-    fs::write(project_dir.join("web/components/TodoList.tsx"), todo_list)?;
-    fs::write(project_dir.join("web/components/TodoItem.tsx"), todo_item)?;
-    fs::write(project_dir.join("web/components/AddTodoForm.tsx"), add_todo_form)?;
     fs::write(project_dir.join("web/components/DeleteButton.tsx"), delete_button)?;
-    fs::write(project_dir.join("web/components/TodoDetail.tsx"), todo_detail)?;
-    fs::write(project_dir.join("web/components/utils.ts"), utils)?;
 
-    // Create tsconfig.json
-    let tsconfig = r#"{
-  "compilerOptions": {
-    "target": "ES2020",
-    "module": "ESNext",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "jsx": "react",
-    "strict": true,
-    "moduleResolution": "node",
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true
-  },
-  "include": ["components/**/*", "utils.ts"],
-  "exclude": ["node_modules"]
-}"#;
-    fs::write(project_dir.join("web/tsconfig.json"), tsconfig)?;
-
-    // Create tailwind.config.js
-    let tailwind_config = r#"/** @type {import('tailwindcss').Config} */
-module.exports = {
-  content: [
-    "./components/**/*.{js,ts,jsx,tsx}",
-    "./utils.ts"
-  ],
-  theme: {
-    extend: {},
-  },
-  plugins: [],
-}"#;
-    fs::write(project_dir.join("web/tailwind.config.js"), tailwind_config)?;
-
-    // Create postcss.config.js
-    let postcss_config = r#"module.exports = {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-}"#;
-    fs::write(project_dir.join("web/postcss.config.js"), postcss_config)?;
-
-    // Create web/styles.css with Tailwind directives
-    let styles_css = r#"@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* Custom styles if needed */
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-"#;
-    fs::write(project_dir.join("web/styles.css"), styles_css)?;
-
-    // Create web/index.html with Tailwind CDN
+    // Create web/index.html pointing to main.js
     let index_html = r#"<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1742,43 +1633,368 @@ body {
 </head>
 <body>
     <div id="root">Loading...</div>
-    <script type="module" src="/main.ts"></script>
+    <script src="/main.js"></script>
 </body>
 </html>
 "#;
     fs::write(project_dir.join("web/index.html"), index_html)?;
 
-    // Create web/main.ts
-    let main_ts = r#"console.log('Todo app initialized with SSR');
-console.log('Server components rendered on the server');
-console.log('Client components interactive in the browser');
-console.log('TypeScript + Tailwind CSS enabled');
-"#;
-    fs::write(project_dir.join("web/main.ts"), main_ts)?;
+    // Create web/main.js with CDN React (no build step needed)
+    let main_js = r#"// Simple client-side rendering using CDN React
+console.log('Todo app initializing...');
 
-    // Create web/package.json with dependencies
-    let package_json = r#"{
-  "name": "todo-app",
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "build": "echo 'No build step required - using Tailwind CDN for development'",
-    "typecheck": "tsc --noEmit"
-  },
-  "devDependencies": {
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
-    "typescript": "^5.0.0",
-    "tailwindcss": "^3.4.0",
-    "autoprefixer": "^10.4.0",
-    "postcss": "^8.4.0"
-  },
-  "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+// The root element where React will mount
+const rootElement = document.getElementById('root');
+
+if (!rootElement) {
+  console.error('Root element not found!');
+} else {
+  console.log('Root element found, loading React...');
+
+  // Load React from CDN
+  loadScript('https://unpkg.com/react@18/umd/react.production.min.js', () => {
+    loadScript('https://unpkg.com/react-dom@18/umd/react-dom.production.min.js', () => {
+      loadScript('https://unpkg.com/@babel/standalone/babel.min.js', () => {
+        console.log('All scripts loaded, initializing app...');
+        initApp();
+      });
+    });
+  });
+}
+
+function loadScript(url, callback) {
+  const script = document.createElement('script');
+  script.src = url;
+  script.onload = callback;
+  script.onerror = () => console.error(\`Failed to load \${url}\`);
+  document.head.appendChild(script);
+}
+
+function initApp() {
+  const { useState, useEffect } = React;
+  const { createRoot } = ReactDOM;
+
+  // TodoList Component
+  function TodoList() {
+    const [todos, setTodos] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      fetch('/api/todos')
+        .then(res => res.json())
+        .then(data => {
+          setTodos(data);
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error('Failed to load todos:', err);
+          setLoading(false);
+        });
+    }, []);
+
+    const handleAddTodo = (title, description) => {
+      const newTodo = {
+        id: Date.now().toString(),
+        title,
+        description: description || null,
+        completed: false,
+        created_at: Date.now() / 1000
+      };
+      setTodos([...todos, newTodo]);
+    };
+
+    const handleToggleTodo = (id) => {
+      setTodos(todos.map(todo =>
+        todo.id === id ? { ...todo, completed: !todo.completed } : todo
+      ));
+    };
+
+    const handleDeleteTodo = (id) => {
+      setTodos(todos.filter(todo => todo.id !== id));
+    };
+
+    return React.createElement('div', { className: 'max-w-3xl mx-auto px-4 py-10 font-sans' },
+      React.createElement('header', { className: 'mb-10 text-center' },
+        React.createElement('h1', { className: 'text-5xl mb-2 bg-gradient-to-r from-purple-500 to-indigo-600 bg-clip-text text-transparent' }, '📝 Todo App'),
+        React.createElement('p', { className: 'text-gray-500 mt-2' }, 'Full-stack SSR with Rust + React')
+      ),
+      React.createElement(AddTodoForm, { onAddTodo: handleAddTodo }),
+      React.createElement('div', { className: 'mt-8' },
+        loading ?
+          React.createElement('div', { className: 'text-center py-16 bg-gray-50 rounded-lg text-gray-500' },
+            React.createElement('p', { className: 'text-xl' }, 'Loading... ⏳')
+          ) :
+        todos.length === 0 ?
+          React.createElement('div', { className: 'text-center py-16 bg-gray-50 rounded-lg text-gray-500' },
+            React.createElement('p', { className: 'text-xl' }, 'No todos yet. Create one above! 🚀')
+          ) :
+          React.createElement('ul', { className: 'space-y-3' },
+            todos.map(todo =>
+              React.createElement(TodoItem, {
+                key: todo.id,
+                todo: todo,
+                onToggle: handleToggleTodo,
+                onDelete: handleDeleteTodo
+              })
+            )
+          )
+      ),
+      React.createElement('footer', { className: 'mt-16 pt-6 border-t border-gray-200 text-center text-gray-500 text-sm' },
+        React.createElement('p', null, 'Built with ❤️ using Virust v0.4'),
+        React.createElement('p', { className: 'mt-1' }, '• Server-side rendering • File-based routing • TypeScript + Tailwind')
+      )
+    );
   }
-}"#;
-    fs::write(project_dir.join("web/package.json"), package_json)?;
+
+  // TodoItem Component
+  function TodoItem({ todo, onToggle, onDelete }) {
+    return React.createElement('li', { className: 'bg-white border border-gray-200 rounded-lg p-4 shadow-sm flex items-center gap-3 transition-all hover:shadow-md' },
+      React.createElement('input', {
+        type: 'checkbox',
+        checked: todo.completed,
+        onChange: () => onToggle(todo.id),
+        className: 'w-5 h-5 cursor-pointer'
+      }),
+      React.createElement('div', {
+        className: \`flex-1 \${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}\`
+      },
+        React.createElement('div', { className: 'font-semibold text-lg' }, todo.title),
+        todo.description && React.createElement('div', { className: 'text-sm text-gray-600 mt-1' }, todo.description)
+      ),
+      React.createElement(DeleteButton, { todoId: todo.id, onDelete })
+    );
+  }
+
+  // AddTodoForm Component
+  function AddTodoForm({ onAddTodo }) {
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      if (!title.trim()) return;
+
+      setIsSubmitting(true);
+
+      try {
+        const response = await fetch('/api/todos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: title.trim(),
+            description: description.trim() || undefined
+          }),
+        });
+
+        if (response.ok) {
+          onAddTodo(title.trim(), description.trim());
+          setTitle('');
+          setDescription('');
+        }
+      } catch (error) {
+        console.error('Failed to create todo:', error);
+        alert('Failed to create todo. Please try again.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
+
+    return React.createElement('form', {
+      onSubmit: handleSubmit,
+      className: 'bg-white p-6 rounded-lg shadow-md mb-8'
+    },
+      React.createElement('h2', { className: 'text-2xl mb-4 text-gray-800' }, 'Add New Todo'),
+      React.createElement('div', { className: 'flex flex-col gap-3' },
+        React.createElement('div', null,
+          React.createElement('label', { className: 'block mb-1 font-medium text-gray-700' }, 'Title *'),
+          React.createElement('input', {
+            type: 'text',
+            value: title,
+            onChange: (e) => setTitle(e.target.value),
+            placeholder: 'What needs to be done?',
+            required: true,
+            className: 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500'
+          })
+        ),
+        React.createElement('div', null,
+          React.createElement('label', { className: 'block mb-1 font-medium text-gray-700' }, 'Description (optional)'),
+          React.createElement('textarea', {
+            value: description,
+            onChange: (e) => setDescription(e.target.value),
+            placeholder: 'Add more details...',
+            rows: 3,
+            className: 'w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm'
+          })
+        ),
+        React.createElement('button', {
+          type: 'submit',
+          disabled: isSubmitting || !title.trim(),
+          className: \`px-6 py-2 rounded-md font-medium text-white transition-colors \${isSubmitting || !title.trim()
+            ? 'bg-gray-300 cursor-not-allowed'
+            : 'bg-purple-600 hover:bg-purple-700 cursor-pointer'
+          }\`
+        }, isSubmitting ? 'Adding...' : 'Add Todo')
+      )
+    );
+  }
+
+  // DeleteButton Component
+  function DeleteButton({ todoId, onDelete }) {
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const handleDelete = async () => {
+      if (!confirm('Are you sure you want to delete this todo?')) return;
+
+      setIsDeleting(true);
+
+      try {
+        const response = await fetch(\`/api/todos/\${todoId}\`, {
+          method: 'DELETE',
+        });
+
+        if (response.ok) {
+          onDelete(todoId);
+        }
+      } catch (error) {
+        console.error('Failed to delete todo:', error);
+        alert('Failed to delete todo. Please try again.');
+      } finally {
+        setIsDeleting(false);
+      }
+    };
+
+    return React.createElement('button', {
+      onClick: handleDelete,
+      disabled: isDeleting,
+      className: \`px-4 py-2 rounded-md text-sm font-medium text-white transition-colors \${isDeleting
+        ? 'bg-gray-300 cursor-not-allowed'
+        : 'bg-red-500 hover:bg-red-600 cursor-pointer'
+      }\`
+    }, isDeleting ? 'Deleting...' : '🗑️ Delete');
+  }
+
+  // Mount the app
+  try {
+    const root = createRoot(rootElement);
+    root.render(React.createElement(TodoList));
+    console.log('Todo app mounted successfully!');
+  } catch (error) {
+    console.error('Failed to mount app:', error);
+  }
+}
+"#;
+    fs::write(project_dir.join("web/main.js"), main_js)?;
+
+    // Create comprehensive styles.css with actual CSS (not Tailwind directives)
+    let mut styles_css = include_str!("../templates/todo/web/styles.css");
+    
+    // If the template styles.css doesn't exist or has Tailwind directives, create our own
+    if styles_css.contains("@tailwind") {
+        styles_css = r#"/* Tailwind-like utility classes */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #f9fafb;
+}
+
+.max-w-3xl { max-width: 48rem; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.px-4 { padding-left: 1rem; padding-right: 1rem; }
+.py-10 { padding-top: 2.5rem; padding-bottom: 2.5rem; }
+.font-sans { font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+.mb-10 { margin-bottom: 2.5rem; }
+.mb-8 { margin-bottom: 2rem; }
+.mb-4 { margin-bottom: 1rem; }
+.mb-2 { margin-bottom: 0.5rem; }
+.mb-1 { margin-bottom: 0.25rem; }
+.mt-8 { margin-top: 2rem; }
+.mt-16 { margin-top: 4rem; }
+.mt-2 { margin-top: 0.5rem; }
+.mt-1 { margin-top: 0.25rem; }
+.pt-6 { padding-top: 1.5rem; }
+.text-center { text-align: center; }
+.text-5xl { font-size: 3rem; line-height: 1; }
+.text-2xl { font-size: 1.5rem; line-height: 2rem; }
+.text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+.text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+.text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+.bg-gradient-to-r { background-image: linear-gradient(to right, var(--tw-gradient-stops)); }
+.from-purple-500 { --tw-gradient-from: #a855f7; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(168, 85, 247, 0)); }
+.to-indigo-600 { --tw-gradient-to: #4f46e5; }
+.bg-clip-text { -webkit-background-clip: text; background-clip: text; }
+.text-transparent { color: transparent; }
+.text-gray-800 { color: #1f2937; }
+.text-gray-700 { color: #374151; }
+.text-gray-600 { color: #4b5563; }
+.text-gray-500 { color: #6b7280; }
+.text-gray-400 { color: #9ca3af; }
+.text-white { color: white; }
+.bg-white { background-color: white; }
+.bg-gray-50 { background-color: #f9fafb; }
+.bg-purple-600 { background-color: #9333ea; }
+.bg-purple-600:hover { background-color: #7e22ce; }
+.bg-red-500 { background-color: #ef4444; }
+.bg-red-500:hover { background-color: #dc2626; }
+.bg-gray-300 { background-color: #d1d5db; }
+.border { border-width: 1px; }
+.border-gray-200 { border-color: #e5e7eb; }
+.border-t { border-top-width: 1px; border-top-style: solid; }
+.rounded-lg { border-radius: 0.5rem; }
+.rounded-md { border-radius: 0.375rem; }
+.shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+.shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+.p-4 { padding: 1rem; }
+.p-6 { padding: 1.5rem; }
+.p-8 { padding: 2rem; }
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.flex-1 { flex: 1 1 0%; }
+.items-center { align-items: center; }
+.gap-3 { gap: 0.75rem; }
+.gap-5 { gap: 1.25rem; }
+.space-y-3 > * + * { margin-top: 0.75rem; }
+.transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.transition-colors { transition-property: color, background-color, border-color; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+.hover\:shadow-md:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+.line-through { text-decoration: line-through; }
+.w-full { width: 100%; }
+.w-5 { width: 1.25rem; }
+.h-5 { height: 1.25rem; }
+.px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+.py-16 { padding-top: 4rem; padding-bottom: 4rem; }
+.rounded-md { border-radius: 0.375rem; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.border-gray-300 { border-color: #d1d5db; }
+.focus\:outline-none:focus { outline: 2px solid transparent; outline-offset: 2px; }
+.focus\:ring-2:focus { --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color); --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color); box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow); }
+.focus\:ring-purple-500:focus { --tw-ring-color: #a855f7; }
+.cursor-pointer { cursor: pointer; }
+.cursor-not-allowed { cursor: not-allowed; }
+.rows-3 { rows: 3; }
+.font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+.block { display: block; }
+input[type="text"], textarea { width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #d1d5db; border-radius: 0.375rem; font-size: 1rem; }
+input[type="text"]:focus, textarea:focus { outline: none; border-color: #a855f7; box-shadow: 0 0 0 2px #a855f7; }
+button { font-family: inherit; }
+button:disabled { opacity: 0.6; cursor: not-allowed; }
+.py-5 { padding-top: 1.25rem; padding-bottom: 1.25rem; }
+"#;
+    }
+    
+    fs::write(project_dir.join("web/styles.css"), styles_css)?;
 
     Ok(())
 }
