@@ -67,6 +67,7 @@ uuid = {{ version = "1.0", features = ["v4"] }}
         "chat" => setup_chat_template(project_dir)?,
         "todo" => setup_todo_template(project_dir)?,
         "ssr-blog" => setup_ssr_blog_template(project_dir)?,
+        "ssr-dashboard" => setup_ssr_dashboard_template(project_dir)?,
         _ => setup_basic_template(project_dir)?,
     }
 
@@ -709,6 +710,286 @@ export default async function HomePage() {
 
 // The page is already rendered on the server
 // You can add client-side interactivity here
+"#;
+    fs::write(project_dir.join("web/main.js"), main_js)?;
+
+    Ok(())
+}
+
+fn setup_ssr_dashboard_template(project_dir: &Path) -> Result<()> {
+    // Create lib.rs
+    let lib_rs = r#"pub mod api;
+"#;
+    fs::write(project_dir.join("src/lib.rs"), lib_rs)?;
+
+    // Create api/mod.rs
+    let api_mod = r#"pub mod route;
+
+// This function is called by the runtime to register routes
+pub fn register_routes(router: axum::Router) -> axum::Router {
+    use axum::routing::get;
+
+    // Register dashboard route with SSR and data passing
+    router.route("/", get(route::dashboard_wrapper))
+}
+"#;
+    fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
+
+    // Create api/route.rs with SSR implementation
+    let route_rs = r#"use virust_macros::{get, render_component};
+use virust_runtime::RenderedHtml;
+use serde_json::json;
+
+/// Dashboard page with server-side rendering and data
+#[get]
+#[render_component("Dashboard")]
+pub async fn dashboard() -> RenderedHtml {
+    // In a real app, you might fetch this data from a database
+    let stats = json!({
+        "totalUsers": 1250,
+        "activeUsers": 342,
+        "revenue": 45320,
+        "conversionRate": 3.2
+    });
+
+    RenderedHtml::with_props("Dashboard", stats)
+}
+"#;
+    fs::write(project_dir.join("src/api/route.rs"), route_rs)?;
+
+    // Create web/components directory
+    fs::create_dir_all(project_dir.join("web/components"))?;
+
+    // Create Dashboard.jsx component (server component)
+    let dashboard_jsx = r#"// Dashboard.jsx - Server-side rendered dashboard with data
+import RefreshButton from './RefreshButton';
+
+export default async function Dashboard({ title, stats }) {
+  // This component is rendered on the server
+  // Data is passed from the backend as props
+
+  return (
+    <div style={{
+      maxWidth: '1200px',
+      margin: '0 auto',
+      padding: '20px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      background: '#f5f5f5',
+      minHeight: '100vh'
+    }}>
+      <header style={{
+        marginBottom: '40px',
+        paddingBottom: '20px',
+        borderBottom: '2px solid #e0e0e0',
+        background: 'white',
+        padding: '30px',
+        borderRadius: '8px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <h1 style={{
+          fontSize: '2.5rem',
+          marginBottom: '10px',
+          color: '#333'
+        }}>
+          {title || 'Analytics Dashboard'}
+        </h1>
+        <p style={{ color: '#666', fontSize: '1.1rem' }}>
+          Real-time metrics and insights
+        </p>
+        <div style={{ marginTop: '20px' }}>
+          <RefreshButton />
+        </div>
+      </header>
+
+      <main>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+          gap: '20px',
+          marginBottom: '40px'
+        }}>
+          <StatCard
+            title="Total Users"
+            value={stats?.totalUsers || 0}
+            change="+12.5%"
+            trend="up"
+          />
+          <StatCard
+            title="Active Users"
+            value={stats?.activeUsers || 0}
+            change="+8.2%"
+            trend="up"
+          />
+          <StatCard
+            title="Revenue"
+            value={'$' + ((stats?.revenue || 0) / 1000).toFixed(1) + 'k'}
+            change="+23.1%"
+            trend="up"
+          />
+          <StatCard
+            title="Conversion Rate"
+            value={stats?.conversionRate + '%' || '0%'}
+            change="-0.5%"
+            trend="down"
+          />
+        </div>
+
+        <section style={{
+          background: 'white',
+          padding: '30px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        }}>
+          <h2 style={{ fontSize: '1.8rem', marginBottom: '20px', color: '#333' }}>
+            Quick Start Guide
+          </h2>
+          <ul style={{
+            lineHeight: '1.8',
+            color: '#666',
+            paddingLeft: '20px'
+          }}>
+            <li>This dashboard uses <strong>server-side rendering</strong> - the HTML is generated on the server</li>
+            <li>Data is passed from the backend using <code>RenderedHtml::with_props()</code> in Rust</li>
+            <li>The <strong>RefreshButton</strong> is a <em>client component</em> (marked with 'use client')</li>
+            <li>Client components can use React hooks and handle user interactions</li>
+            <li>Server components can fetch data and pass it as props to client components</li>
+          </ul>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+// Server-side helper component (can be rendered on server)
+function StatCard({ title, value, change, trend }) {
+  const trendColor = trend === 'up' ? '#10b981' : '#ef4444';
+  const trendIcon = trend === 'up' ? '↑' : '↓';
+
+  return (
+    <div style={{
+      background: 'white',
+      padding: '25px',
+      borderRadius: '8px',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+      border: '1px solid #e5e7eb'
+    }}>
+      <h3 style={{
+        fontSize: '0.9rem',
+        color: '#666',
+        marginBottom: '10px',
+        textTransform: 'uppercase',
+        letterSpacing: '0.5px'
+      }}>
+        {title}
+      </h3>
+      <div style={{
+        fontSize: '2rem',
+        fontWeight: 'bold',
+        color: '#111',
+        marginBottom: '8px'
+      }}>
+        {value}
+      </div>
+      <div style={{
+        fontSize: '0.85rem',
+        color: trendColor,
+        fontWeight: '500'
+      }}>
+        {trendIcon} {change} from last month
+      </div>
+    </div>
+  );
+}
+"#;
+    fs::write(project_dir.join("web/components/Dashboard.jsx"), dashboard_jsx)?;
+
+    // Create RefreshButton.jsx (client component)
+    let refresh_button_jsx = r#"// RefreshButton.jsx - Client-side interactive component
+'use client';
+
+import { useState } from 'react';
+
+export default function RefreshButton() {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(null);
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+
+    // Simulate a refresh action
+    setTimeout(() => {
+      setIsRefreshing(false);
+      setLastRefresh(new Date().toLocaleTimeString());
+    }, 1000);
+  };
+
+  return (
+    <div>
+      <button
+        onClick={handleRefresh}
+        disabled={isRefreshing}
+        style={{
+          padding: '10px 20px',
+          fontSize: '1rem',
+          fontWeight: '500',
+          background: isRefreshing ? '#9ca3af' : '#007bff',
+          color: 'white',
+          border: 'none',
+          borderRadius: '6px',
+          cursor: isRefreshing ? 'not-allowed' : 'pointer',
+          transition: 'all 0.2s',
+          opacity: isRefreshing ? 0.7 : 1
+        }}
+      >
+        {isRefreshing ? '⏳ Refreshing...' : '🔄 Refresh Data'}
+      </button>
+      {lastRefresh && (
+        <div style={{
+          marginTop: '10px',
+          fontSize: '0.85rem',
+          color: '#666'
+        }}>
+          Last refreshed: {lastRefresh}
+        </div>
+      )}
+    </div>
+  );
+}
+"#;
+    fs::write(project_dir.join("web/components/RefreshButton.jsx"), refresh_button_jsx)?;
+
+    // Create web/index.html
+    let index_html = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard - Virust SSR</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #fafafa;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">{{SSR_CONTENT}}</div>
+    <script type="module" src="/main.js"></script>
+</body>
+</html>
+"#;
+    fs::write(project_dir.join("web/index.html"), index_html)?;
+
+    // Create web/main.js
+    let main_js = r#"console.log('Virust SSR dashboard initialized');
+
+// The page is already rendered on the server
+// Client components (with 'use client') are hydrated here
 "#;
     fs::write(project_dir.join("web/main.js"), main_js)?;
 
