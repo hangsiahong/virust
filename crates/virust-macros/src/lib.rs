@@ -258,59 +258,85 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
         // Generate parameter declarations for wrapper signature
-        // For Axum handlers, we need to accept extractor types, not inner types
-        let wrapper_params: Vec<_> = path_params.iter()
-            .map(|p| {
-                let name = &p.name;
-                let typ = &p.typ;
-                quote! { #name: axum::extract::Path<#typ> }
-            })
-            .chain(body_params.iter().map(|b| {
-                let name = &b.name;
-                let typ = &b.typ;
-                quote! { #name: axum::Json<#typ> }
-            }))
-            .collect();
-
-        // Generate parameter names for extraction and call
-        let param_names: Vec<_> = path_params.iter()
-            .map(|p| &p.name)
-            .chain(body_params.iter().map(|b| &b.name))
-            .collect();
-
-        // Get the return type from the original function
-        let return_type = &original_fn.sig.output;
-
-        // Generate extraction code to unwrap extractors
-        let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
+        // For Axum handlers:
+        // - Multiple path params must be combined into single Path<(T1, T2, ...)>
+        // - Single path param uses Path<T>
+        // - Body params use Json<T>
+        let (wrapper_params, extractor_code, all_params): (Vec<_>, _, Vec<_>) = if !path_params.is_empty() && !body_params.is_empty() {
             // Both path and body parameters
-            let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
-            let body_param = &body_params[0];
-            let body_name = &body_param.name;
-            let all_param_names: Vec<_> = path_params.iter()
-                .map(|p| &p.name)
-                .chain(body_params.iter().map(|b| &b.name))
-                .collect();
-            let code = quote! {
-                let (#(#path_names),*) = (#(#path_names),*).0;
-                let #body_name = #body_name.0;
-            };
-            (code, all_param_names)
+            if path_params.len() == 1 {
+                // Single path param
+                let path_param = &path_params[0];
+                let path_name = &path_param.name;
+                let path_typ = &path_param.typ;
+                let body_param = &body_params[0];
+                let body_name = &body_param.name;
+                let body_typ = &body_param.typ;
+                let params = vec![
+                    quote! { #path_name: axum::extract::Path<#path_typ> },
+                    quote! { #body_name: axum::Json<#body_typ> }
+                ];
+                let extract = quote! {
+                    let #path_name = #path_name.0;
+                    let #body_name = #body_name.0;
+                };
+                let all = vec![path_name.clone(), body_name.clone()];
+                (params, extract, all)
+            } else {
+                // Multiple path params - combine into single tuple extractor
+                let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
+                let path_types: Vec<_> = path_params.iter().map(|p| &p.typ).collect();
+                let path_tuple_type = quote! { (#(#path_types),*) };
+                let body_param = &body_params[0];
+                let body_name = &body_param.name;
+                let body_typ = &body_param.typ;
+                let params = vec![
+                    quote! { _path: axum::extract::Path<#path_tuple_type> },
+                    quote! { #body_name: axum::Json<#body_typ> }
+                ];
+                let extract = quote! {
+                    let (#(#path_names),*) = _path.0;
+                    let #body_name = #body_name.0;
+                };
+                let all: Vec<_> = path_params.iter().map(|p| p.name.clone())
+                    .chain(std::iter::once(body_name.clone()))
+                    .collect();
+                (params, extract, all)
+            }
         } else if !path_params.is_empty() {
             // Only path parameters
-            let code = quote! {
-                let (#(#param_names),*) = (#(#param_names),*).0;
-            };
-            (code, param_names)
+            if path_params.len() == 1 {
+                // Single path param
+                let path_param = &path_params[0];
+                let path_name = &path_param.name;
+                let path_typ = &path_param.typ;
+                let params = vec![quote! { #path_name: axum::extract::Path<#path_typ> }];
+                let extract = quote! { let #path_name = #path_name.0; };
+                let all = vec![path_name.clone()];
+                (params, extract, all)
+            } else {
+                // Multiple path params - combine into single tuple extractor
+                let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
+                let path_types: Vec<_> = path_params.iter().map(|p| &p.typ).collect();
+                let path_tuple_type = quote! { (#(#path_types),*) };
+                let params = vec![quote! { _path: axum::extract::Path<#path_tuple_type> }];
+                let extract = quote! { let (#(#path_names),*) = _path.0; };
+                let all = path_params.iter().map(|p| p.name.clone()).collect();
+                (params, extract, all)
+            }
         } else {
             // Only body parameters (single body param guaranteed by validation)
             let body_param = &body_params[0];
             let body_name = &body_param.name;
-            let code = quote! {
-                let #body_name = #body_name.0;
-            };
-            (code, vec![body_name])
+            let body_typ = &body_param.typ;
+            let params = vec![quote! { #body_name: axum::Json<#body_typ> }];
+            let extract = quote! { let #body_name = #body_name.0; };
+            let all = vec![body_name.clone()];
+            (params, extract, all)
         };
+
+        // Get the return type from the original function
+        let return_type = &original_fn.sig.output;
 
         quote! {
             // Original function (stripped of attributes)
@@ -390,59 +416,85 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
         // Generate parameter declarations for wrapper signature
-        // For Axum handlers, we need to accept extractor types, not inner types
-        let wrapper_params: Vec<_> = path_params.iter()
-            .map(|p| {
-                let name = &p.name;
-                let typ = &p.typ;
-                quote! { #name: axum::extract::Path<#typ> }
-            })
-            .chain(body_params.iter().map(|b| {
-                let name = &b.name;
-                let typ = &b.typ;
-                quote! { #name: axum::Json<#typ> }
-            }))
-            .collect();
-
-        // Generate parameter names for extraction and call
-        let param_names: Vec<_> = path_params.iter()
-            .map(|p| &p.name)
-            .chain(body_params.iter().map(|b| &b.name))
-            .collect();
-
-        // Get the return type from the original function
-        let return_type = &original_fn.sig.output;
-
-        // Generate extraction code to unwrap extractors
-        let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
+        // For Axum handlers:
+        // - Multiple path params must be combined into single Path<(T1, T2, ...)>
+        // - Single path param uses Path<T>
+        // - Body params use Json<T>
+        let (wrapper_params, extractor_code, all_params): (Vec<_>, _, Vec<_>) = if !path_params.is_empty() && !body_params.is_empty() {
             // Both path and body parameters
-            let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
-            let body_param = &body_params[0];
-            let body_name = &body_param.name;
-            let all_param_names: Vec<_> = path_params.iter()
-                .map(|p| &p.name)
-                .chain(body_params.iter().map(|b| &b.name))
-                .collect();
-            let code = quote! {
-                let (#(#path_names),*) = (#(#path_names),*).0;
-                let #body_name = #body_name.0;
-            };
-            (code, all_param_names)
+            if path_params.len() == 1 {
+                // Single path param
+                let path_param = &path_params[0];
+                let path_name = &path_param.name;
+                let path_typ = &path_param.typ;
+                let body_param = &body_params[0];
+                let body_name = &body_param.name;
+                let body_typ = &body_param.typ;
+                let params = vec![
+                    quote! { #path_name: axum::extract::Path<#path_typ> },
+                    quote! { #body_name: axum::Json<#body_typ> }
+                ];
+                let extract = quote! {
+                    let #path_name = #path_name.0;
+                    let #body_name = #body_name.0;
+                };
+                let all = vec![path_name.clone(), body_name.clone()];
+                (params, extract, all)
+            } else {
+                // Multiple path params - combine into single tuple extractor
+                let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
+                let path_types: Vec<_> = path_params.iter().map(|p| &p.typ).collect();
+                let path_tuple_type = quote! { (#(#path_types),*) };
+                let body_param = &body_params[0];
+                let body_name = &body_param.name;
+                let body_typ = &body_param.typ;
+                let params = vec![
+                    quote! { _path: axum::extract::Path<#path_tuple_type> },
+                    quote! { #body_name: axum::Json<#body_typ> }
+                ];
+                let extract = quote! {
+                    let (#(#path_names),*) = _path.0;
+                    let #body_name = #body_name.0;
+                };
+                let all: Vec<_> = path_params.iter().map(|p| p.name.clone())
+                    .chain(std::iter::once(body_name.clone()))
+                    .collect();
+                (params, extract, all)
+            }
         } else if !path_params.is_empty() {
             // Only path parameters
-            let code = quote! {
-                let (#(#param_names),*) = (#(#param_names),*).0;
-            };
-            (code, param_names)
+            if path_params.len() == 1 {
+                // Single path param
+                let path_param = &path_params[0];
+                let path_name = &path_param.name;
+                let path_typ = &path_param.typ;
+                let params = vec![quote! { #path_name: axum::extract::Path<#path_typ> }];
+                let extract = quote! { let #path_name = #path_name.0; };
+                let all = vec![path_name.clone()];
+                (params, extract, all)
+            } else {
+                // Multiple path params - combine into single tuple extractor
+                let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
+                let path_types: Vec<_> = path_params.iter().map(|p| &p.typ).collect();
+                let path_tuple_type = quote! { (#(#path_types),*) };
+                let params = vec![quote! { _path: axum::extract::Path<#path_tuple_type> }];
+                let extract = quote! { let (#(#path_names),*) = _path.0; };
+                let all = path_params.iter().map(|p| p.name.clone()).collect();
+                (params, extract, all)
+            }
         } else {
             // Only body parameters (single body param guaranteed by validation)
             let body_param = &body_params[0];
             let body_name = &body_param.name;
-            let code = quote! {
-                let #body_name = #body_name.0;
-            };
-            (code, vec![body_name])
+            let body_typ = &body_param.typ;
+            let params = vec![quote! { #body_name: axum::Json<#body_typ> }];
+            let extract = quote! { let #body_name = #body_name.0; };
+            let all = vec![body_name.clone()];
+            (params, extract, all)
         };
+
+        // Get the return type from the original function
+        let return_type = &original_fn.sig.output;
 
         quote! {
             // Original function (stripped of attributes)
@@ -522,59 +574,85 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
         // Generate parameter declarations for wrapper signature
-        // For Axum handlers, we need to accept extractor types, not inner types
-        let wrapper_params: Vec<_> = path_params.iter()
-            .map(|p| {
-                let name = &p.name;
-                let typ = &p.typ;
-                quote! { #name: axum::extract::Path<#typ> }
-            })
-            .chain(body_params.iter().map(|b| {
-                let name = &b.name;
-                let typ = &b.typ;
-                quote! { #name: axum::Json<#typ> }
-            }))
-            .collect();
-
-        // Generate parameter names for extraction and call
-        let param_names: Vec<_> = path_params.iter()
-            .map(|p| &p.name)
-            .chain(body_params.iter().map(|b| &b.name))
-            .collect();
-
-        // Get the return type from the original function
-        let return_type = &original_fn.sig.output;
-
-        // Generate extraction code to unwrap extractors
-        let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
+        // For Axum handlers:
+        // - Multiple path params must be combined into single Path<(T1, T2, ...)>
+        // - Single path param uses Path<T>
+        // - Body params use Json<T>
+        let (wrapper_params, extractor_code, all_params): (Vec<_>, _, Vec<_>) = if !path_params.is_empty() && !body_params.is_empty() {
             // Both path and body parameters
-            let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
-            let body_param = &body_params[0];
-            let body_name = &body_param.name;
-            let all_param_names: Vec<_> = path_params.iter()
-                .map(|p| &p.name)
-                .chain(body_params.iter().map(|b| &b.name))
-                .collect();
-            let code = quote! {
-                let (#(#path_names),*) = (#(#path_names),*).0;
-                let #body_name = #body_name.0;
-            };
-            (code, all_param_names)
+            if path_params.len() == 1 {
+                // Single path param
+                let path_param = &path_params[0];
+                let path_name = &path_param.name;
+                let path_typ = &path_param.typ;
+                let body_param = &body_params[0];
+                let body_name = &body_param.name;
+                let body_typ = &body_param.typ;
+                let params = vec![
+                    quote! { #path_name: axum::extract::Path<#path_typ> },
+                    quote! { #body_name: axum::Json<#body_typ> }
+                ];
+                let extract = quote! {
+                    let #path_name = #path_name.0;
+                    let #body_name = #body_name.0;
+                };
+                let all = vec![path_name.clone(), body_name.clone()];
+                (params, extract, all)
+            } else {
+                // Multiple path params - combine into single tuple extractor
+                let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
+                let path_types: Vec<_> = path_params.iter().map(|p| &p.typ).collect();
+                let path_tuple_type = quote! { (#(#path_types),*) };
+                let body_param = &body_params[0];
+                let body_name = &body_param.name;
+                let body_typ = &body_param.typ;
+                let params = vec![
+                    quote! { _path: axum::extract::Path<#path_tuple_type> },
+                    quote! { #body_name: axum::Json<#body_typ> }
+                ];
+                let extract = quote! {
+                    let (#(#path_names),*) = _path.0;
+                    let #body_name = #body_name.0;
+                };
+                let all: Vec<_> = path_params.iter().map(|p| p.name.clone())
+                    .chain(std::iter::once(body_name.clone()))
+                    .collect();
+                (params, extract, all)
+            }
         } else if !path_params.is_empty() {
             // Only path parameters
-            let code = quote! {
-                let (#(#param_names),*) = (#(#param_names),*).0;
-            };
-            (code, param_names)
+            if path_params.len() == 1 {
+                // Single path param
+                let path_param = &path_params[0];
+                let path_name = &path_param.name;
+                let path_typ = &path_param.typ;
+                let params = vec![quote! { #path_name: axum::extract::Path<#path_typ> }];
+                let extract = quote! { let #path_name = #path_name.0; };
+                let all = vec![path_name.clone()];
+                (params, extract, all)
+            } else {
+                // Multiple path params - combine into single tuple extractor
+                let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
+                let path_types: Vec<_> = path_params.iter().map(|p| &p.typ).collect();
+                let path_tuple_type = quote! { (#(#path_types),*) };
+                let params = vec![quote! { _path: axum::extract::Path<#path_tuple_type> }];
+                let extract = quote! { let (#(#path_names),*) = _path.0; };
+                let all = path_params.iter().map(|p| p.name.clone()).collect();
+                (params, extract, all)
+            }
         } else {
             // Only body parameters (single body param guaranteed by validation)
             let body_param = &body_params[0];
             let body_name = &body_param.name;
-            let code = quote! {
-                let #body_name = #body_name.0;
-            };
-            (code, vec![body_name])
+            let body_typ = &body_param.typ;
+            let params = vec![quote! { #body_name: axum::Json<#body_typ> }];
+            let extract = quote! { let #body_name = #body_name.0; };
+            let all = vec![body_name.clone()];
+            (params, extract, all)
         };
+
+        // Get the return type from the original function
+        let return_type = &original_fn.sig.output;
 
         quote! {
             // Original function (stripped of attributes)
@@ -654,59 +732,85 @@ pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
         // Generate parameter declarations for wrapper signature
-        // For Axum handlers, we need to accept extractor types, not inner types
-        let wrapper_params: Vec<_> = path_params.iter()
-            .map(|p| {
-                let name = &p.name;
-                let typ = &p.typ;
-                quote! { #name: axum::extract::Path<#typ> }
-            })
-            .chain(body_params.iter().map(|b| {
-                let name = &b.name;
-                let typ = &b.typ;
-                quote! { #name: axum::Json<#typ> }
-            }))
-            .collect();
-
-        // Generate parameter names for extraction and call
-        let param_names: Vec<_> = path_params.iter()
-            .map(|p| &p.name)
-            .chain(body_params.iter().map(|b| &b.name))
-            .collect();
-
-        // Get the return type from the original function
-        let return_type = &original_fn.sig.output;
-
-        // Generate extraction code to unwrap extractors
-        let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
+        // For Axum handlers:
+        // - Multiple path params must be combined into single Path<(T1, T2, ...)>
+        // - Single path param uses Path<T>
+        // - Body params use Json<T>
+        let (wrapper_params, extractor_code, all_params): (Vec<_>, _, Vec<_>) = if !path_params.is_empty() && !body_params.is_empty() {
             // Both path and body parameters
-            let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
-            let body_param = &body_params[0];
-            let body_name = &body_param.name;
-            let all_param_names: Vec<_> = path_params.iter()
-                .map(|p| &p.name)
-                .chain(body_params.iter().map(|b| &b.name))
-                .collect();
-            let code = quote! {
-                let (#(#path_names),*) = (#(#path_names),*).0;
-                let #body_name = #body_name.0;
-            };
-            (code, all_param_names)
+            if path_params.len() == 1 {
+                // Single path param
+                let path_param = &path_params[0];
+                let path_name = &path_param.name;
+                let path_typ = &path_param.typ;
+                let body_param = &body_params[0];
+                let body_name = &body_param.name;
+                let body_typ = &body_param.typ;
+                let params = vec![
+                    quote! { #path_name: axum::extract::Path<#path_typ> },
+                    quote! { #body_name: axum::Json<#body_typ> }
+                ];
+                let extract = quote! {
+                    let #path_name = #path_name.0;
+                    let #body_name = #body_name.0;
+                };
+                let all = vec![path_name.clone(), body_name.clone()];
+                (params, extract, all)
+            } else {
+                // Multiple path params - combine into single tuple extractor
+                let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
+                let path_types: Vec<_> = path_params.iter().map(|p| &p.typ).collect();
+                let path_tuple_type = quote! { (#(#path_types),*) };
+                let body_param = &body_params[0];
+                let body_name = &body_param.name;
+                let body_typ = &body_param.typ;
+                let params = vec![
+                    quote! { _path: axum::extract::Path<#path_tuple_type> },
+                    quote! { #body_name: axum::Json<#body_typ> }
+                ];
+                let extract = quote! {
+                    let (#(#path_names),*) = _path.0;
+                    let #body_name = #body_name.0;
+                };
+                let all: Vec<_> = path_params.iter().map(|p| p.name.clone())
+                    .chain(std::iter::once(body_name.clone()))
+                    .collect();
+                (params, extract, all)
+            }
         } else if !path_params.is_empty() {
             // Only path parameters
-            let code = quote! {
-                let (#(#param_names),*) = (#(#param_names),*).0;
-            };
-            (code, param_names)
+            if path_params.len() == 1 {
+                // Single path param
+                let path_param = &path_params[0];
+                let path_name = &path_param.name;
+                let path_typ = &path_param.typ;
+                let params = vec![quote! { #path_name: axum::extract::Path<#path_typ> }];
+                let extract = quote! { let #path_name = #path_name.0; };
+                let all = vec![path_name.clone()];
+                (params, extract, all)
+            } else {
+                // Multiple path params - combine into single tuple extractor
+                let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
+                let path_types: Vec<_> = path_params.iter().map(|p| &p.typ).collect();
+                let path_tuple_type = quote! { (#(#path_types),*) };
+                let params = vec![quote! { _path: axum::extract::Path<#path_tuple_type> }];
+                let extract = quote! { let (#(#path_names),*) = _path.0; };
+                let all = path_params.iter().map(|p| p.name.clone()).collect();
+                (params, extract, all)
+            }
         } else {
             // Only body parameters (single body param guaranteed by validation)
             let body_param = &body_params[0];
             let body_name = &body_param.name;
-            let code = quote! {
-                let #body_name = #body_name.0;
-            };
-            (code, vec![body_name])
+            let body_typ = &body_param.typ;
+            let params = vec![quote! { #body_name: axum::Json<#body_typ> }];
+            let extract = quote! { let #body_name = #body_name.0; };
+            let all = vec![body_name.clone()];
+            (params, extract, all)
         };
+
+        // Get the return type from the original function
+        let return_type = &original_fn.sig.output;
 
         quote! {
             // Original function (stripped of attributes)
