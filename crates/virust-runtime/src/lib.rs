@@ -8,6 +8,7 @@ pub mod typescript;
 pub mod persistence;
 pub mod struct_parser;
 pub mod inventory_registry;
+pub mod hmr;
 
 use axum::{Router, routing::get};
 use tower_http::services::ServeDir;
