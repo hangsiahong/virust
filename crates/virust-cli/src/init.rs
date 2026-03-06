@@ -546,6 +546,14 @@ pub async fn delete_todo(#[path] id: String) -> String {
 }
 
 fn setup_ssr_blog_template(project_dir: &Path) -> Result<()> {
+    // Create .virust directory and copy Bun renderer files
+    fs::create_dir_all(project_dir.join(".virust"))?;
+
+    // Include the bundled renderer files
+    fs::write(project_dir.join(".virust/renderer.js"), include_str!("../../virust-bun/bundled/renderer.js"))?;
+    fs::write(project_dir.join(".virust/client.js"), include_str!("../../virust-bun/bundled/client.js"))?;
+    fs::write(project_dir.join(".virust/package.json"), include_str!("../../virust-bun/bundled/package.json"))?;
+
     // Create lib.rs
     let lib_rs = r#"pub mod api;
 "#;
@@ -753,6 +761,14 @@ export default function HomePage() {
 }
 
 fn setup_ssr_dashboard_template(project_dir: &Path) -> Result<()> {
+    // Create .virust directory and copy Bun renderer files
+    fs::create_dir_all(project_dir.join(".virust"))?;
+
+    // Include the bundled renderer files
+    fs::write(project_dir.join(".virust/renderer.js"), include_str!("../../virust-bun/bundled/renderer.js"))?;
+    fs::write(project_dir.join(".virust/client.js"), include_str!("../../virust-bun/bundled/client.js"))?;
+    fs::write(project_dir.join(".virust/package.json"), include_str!("../../virust-bun/bundled/package.json"))?;
+
     // Create lib.rs
     let lib_rs = r#"pub mod api;
 "#;
