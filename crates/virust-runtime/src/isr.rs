@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 use anyhow::Result;
+use axum::response::Html;
 
 /// Metadata for a single ISR route
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -148,6 +149,89 @@ mod serde_system_time {
         SystemTime::UNIX_EPOCH
             .checked_add(std::time::Duration::from_secs(secs))
             .ok_or(serde::de::Error::custom("invalid SystemTime value"))
+    }
+}
+
+/// ISR runtime manager for serving static pages with freshness checking
+///
+/// IsrManager handles serving static pages with incremental static regeneration.
+/// It serves fresh pages immediately and triggers background revalidation for stale pages.
+pub struct IsrManager {
+    metadata: IsrMetadata,
+    static_dir: PathBuf,
+}
+
+impl IsrManager {
+    /// Create a new IsrManager
+    ///
+    /// # Arguments
+    /// * `static_dir` - Path to the static output directory containing isr_metadata.json
+    ///
+    /// # Returns
+    /// * `Ok(IsrManager)` if metadata can be loaded
+    /// * `Err(std::io::Error)` if metadata file cannot be read
+    pub fn new(static_dir: PathBuf) -> Result<Self, std::io::Error> {
+        let metadata_path = static_dir.join("isr_metadata.json");
+        let metadata = IsrMetadata::load(&metadata_path)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, e))?;
+        Ok(Self {
+            metadata,
+            static_dir,
+        })
+    }
+
+    /// Get a static page with freshness checking
+    ///
+    /// This method implements stale-while-revalidate logic:
+    /// - If the page is fresh (within revalidate period), serve it immediately
+    /// - If the page is stale (past revalidate period), serve stale content and trigger background revalidation
+    /// - If the page has no revalidation setting, always serve the static file
+    ///
+    /// # Arguments
+    /// * `path` - The route path (e.g., "/blog/my-post")
+    ///
+    /// # Returns
+    /// * `Some(Html<String>)` - The HTML content if the route exists
+    /// * `None` - If the route is not found or file cannot be read
+    pub async fn get_static_page(&self, path: &str) -> Option<Html<String>> {
+        let route = self.metadata.routes.get(path)?;
+
+        // Check freshness
+        if let Some(revalidate) = route.revalidate {
+            let age = SystemTime::now()
+                .duration_since(route.generated_at)
+                .ok()?;
+
+            if age.as_secs() < revalidate {
+                // Fresh - serve static file
+                let html = tokio::fs::read_to_string(
+                    self.static_dir.join(&route.file_path)
+                ).await.ok()?;
+                return Some(Html(html));
+            } else {
+                // Stale - trigger revalidation, serve stale in meantime
+                let html = tokio::fs::read_to_string(
+                    self.static_dir.join(&route.file_path)
+                ).await.ok()?;
+                self.trigger_revalidation(route);
+                return Some(Html(html));
+            }
+        }
+
+        // No revalidation - always serve static
+        let html = tokio::fs::read_to_string(
+            self.static_dir.join(&route.file_path)
+        ).await.ok()?;
+        Some(Html(html))
+    }
+
+    /// Trigger background revalidation for a stale page
+    ///
+    /// This is a placeholder for future implementation. In a production system,
+    /// this would spawn a background task to regenerate the page.
+    fn trigger_revalidation(&self, route: &RouteMeta) {
+        // TODO: Spawn background task to regenerate
+        eprintln!("Triggering revalidation for {}", route.path);
     }
 }
 
