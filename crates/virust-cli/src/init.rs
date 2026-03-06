@@ -226,9 +226,12 @@ virust-protocol = {{ path = "{}/crates/virust-protocol" }}"#,
         )
     } else {
         r#"[dependencies]
-virust-runtime = { git = "https://github.com/hangsiahong/virust.git", branch = "master" }
-virust-macros = { git = "https://github.com/hangsiahong/virust.git", branch = "master" }
-virust-protocol = { git = "https://github.com/hangsiahong/virust.git", branch = "master" }"#.to_string()
+virust-runtime = { git = "https://github.com/hangsiahong/virust.git", branch = "feature/v0.5-ssg-caching" }
+virust-macros = { git = "https://github.com/hangsiahong/virust.git", branch = "feature/v0.5-ssg-caching" }
+virust-protocol = { git = "https://github.com/hangsiahong/virust.git", branch = "feature/v0.5-ssg-caching" }
+lazy_static = "1.4"
+inventory = "0.3"
+axum = "0.7""#.to_string()
     }
 }
 
@@ -242,7 +245,7 @@ virust-build = {{ path = "{}/crates/virust-build" }}"#,
         )
     } else {
         r#"[build-dependencies]
-virust-build = { git = "https://github.com/hangsiahong/virust.git", branch = "master" }"#.to_string()
+virust-build = { git = "https://github.com/hangsiahong/virust.git", branch = "feature/v0.5-ssg-caching" }"#.to_string()
     }
 }
 
