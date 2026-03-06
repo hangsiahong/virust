@@ -2021,6 +2021,435 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
 
     fs::write(project_dir.join("web/styles.css"), styles_css)?;
 
+    // Create CLAUDE.md for AI assistant context
+    let claude_md = r#"# Claude Code Context for Virust Project
+
+This is a Virust project - a real-time Rust backend framework with SSR.
+
+## Project Structure
+
+\`\`\`
+your-project/
+├ api/                    # Backend routes (Rust)
+│ ├ todos/
+│ │ ├ route.rs           # GET /api/todos, POST /api/todos
+│ │ └ [id]/
+│ │   └ route.rs         # GET/PUT/DELETE /api/todos/:id
+├ web/                    # Frontend files
+│ ├ components/          # React components
+│ │ ├ TodoList.tsx       # Server component (async data fetching)
+│ │ ├ AddTodoForm.tsx    # Client component ('use client')
+│ │ └ DeleteButton.tsx   # Client component
+│ ├ main.js              # Client entry point
+│ ├ index.html           # HTML entry
+│ └ styles.css           # Tailwind-like utility classes
+├ Cargo.toml             # Rust dependencies
+└ src/
+  └ main.rs              # Application entry point
+\`\`\`
+
+## Key Technologies
+
+- **Rust**: Backend with Axum framework
+- **Virust**: SSR framework with Bun runtime
+- **React**: UI with Server-Side Rendering
+- **Tailwind CSS**: Utility-first styling (via styles.css)
+
+## Route Handler Patterns
+
+### HTTP Routes
+
+\`\`\`rust
+use virust_macros::{get, post, put, delete};
+use axum::Json;
+
+#[get]
+async fn list_todos() -> Json<Vec<TodoResponse>> {
+    // Return JSON response
+}
+
+#[post]
+async fn create_todo(Json(input): Json<CreateTodoRequest>) -> Json<TodoResponse> {
+    // Automatic JSON deserialization
+    Json(new_todo)
+}
+
+#[put]
+async fn update_todo(
+    AxumPath(id): AxumPath<String>,
+    Json(update): Json<UpdateTodoRequest>
+) -> Json<TodoResponse> {
+    // Path + body parameters
+}
+\`\`\`
+
+### SSR Routes
+
+\`\`\`rust
+use virust_runtime::RenderedHtml;
+use axum::response::Html;
+
+#[get]
+pub async fn list_todos() -> Html<String> {
+    let rendered = RenderedHtml::new("TodoList");
+    match rendered.render().await {
+        Ok(html) => Html(html),
+        Err(e) => Html(format!("<h1>Error: {}</h1>", e))
+    }
+}
+\`\`\`
+
+## Component Patterns
+
+### Server Components (Default)
+
+\`\`\`tsx
+// web/components/TodoList.tsx
+export default async function TodoList() {
+  const todos = await fetch('/api/todos').then(r => r.json());
+
+  return (
+    <div className="max-w-3xl mx-auto p-6">
+      {todos.map(todo => (
+        <div key={todo.id}>{todo.title}</div>
+      ))}
+    </div>
+  );
+}
+\`\`\`
+
+### Client Components
+
+\`\`\`tsx
+// web/components/AddTodoForm.tsx
+'use client';
+
+import { useState } from 'react';
+
+export default function AddTodoForm() {
+  const [title, setTitle] = useState('');
+
+  const handleSubmit = async () => {
+    await fetch('/api/todos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title })
+    });
+  };
+
+  return <form onSubmit={handleSubmit}>...</form>;
+}
+\`\`\`
+
+## State Management
+
+For shared state between routes:
+
+\`\`\`rust
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+type TodoStore = Arc<RwLock<Vec<TodoResponse>>>;
+
+pub fn get_todo_store() -> TodoStore {
+    use std::sync::OnceLock;
+    static STORE: OnceLock<TodoStore> = OnceLock::new();
+    STORE.get_or_init(|| {
+        Arc::new(RwLock::new(Vec::new()))
+    }).clone()
+}
+\`\`\`
+
+## TypeScript Types
+
+Access auto-generated TypeScript types at:
+\`\`\`
+http://localhost:3000/api/__types
+\`\`\`
+
+## Development Workflow
+
+1. **Start server**: \`cargo run\`
+2. **Access at**: \`http://localhost:3000\`
+3. **Backend changes**: Auto-recompile and restart
+4. **Frontend changes**: Auto-reload
+
+## Common Tasks
+
+### Add a new route:
+1. Create \`api/feature/route.rs\`
+2. Add handler function with \`#[get]\`, \`#[post]\`, etc.
+3. Run \`cargo run\` (auto-discovers routes)
+
+### Add a dynamic route:
+1. Create \`api/feature/[id]/route.rs\`
+2. Use \`AxumPath(id): AxumPath<String>\` to extract parameter
+
+### Create a new component:
+1. Add to \`web/components/ComponentName.tsx\`
+2. Use \`'use client'\` for interactive components
+3. Import/use in other components or route handlers
+
+## Styling
+
+Use Tailwind utility classes from \`styles.css\`:
+- Layout: \`max-w-3xl mx-auto p-6\`
+- Flexbox: \`flex items-center gap-3\`
+- Colors: \`bg-purple-600 text-white\`
+- Spacing: \`mb-4 mt-6 px-4 py-2\`
+
+## Error Handling
+
+SSR errors should be caught and displayed:
+
+\`\`\`rust
+let rendered = RenderedHtml::new("Component");
+match rendered.render().await {
+    Ok(html) => Html(html),
+    Err(e) => {
+        eprintln!("SSR Error: {}", e);
+        Html(format!("<h1>Error: {}</h1>", e))
+    }
+}
+\`\`\`
+
+## Testing
+
+Run tests with: \`cargo test\`
+"#;
+    fs::write(project_dir.join("CLAUDE.md"), claude_md)?;
+
+    // Create SKILL.md for skill-based workflows
+    let skill_md = r#"# Virust Skills and Workflows
+
+This document describes recommended skills and workflows for working with Virust projects.
+
+## Using with Superpowers Skills
+
+When working on a Virust project, these skills are particularly useful:
+
+### 1. superpowers:brainstorming
+**Use when:** Planning new features, components, or routes before implementation.
+
+**Example workflow:**
+\`\`\`
+You: "I want to add user authentication to my todo app"
+
+[brainstorming skill activates]
+- Asks clarifying questions about auth method (JWT vs sessions)
+- Explores different approaches
+- Presents design for approval
+- Creates implementation plan
+\`\`\`
+
+### 2. superpowers:test-driven-development
+**Use when:** Implementing new route handlers, components, or business logic.
+
+**Example workflow:**
+\`\`\`
+1. Write failing test for route handler
+2. Implement minimal handler code
+3. Verify test passes
+4. Refactor if needed
+5. Commit
+\`\`\`
+
+**For Rust routes:**
+\`\`\`rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_create_todo() {
+        let request = CreateTodoRequest {
+            title: "Test Todo".to_string(),
+            description: None,
+        };
+        let response = create_todo(Json(request)).await;
+        assert_eq!(response.title, "Test Todo");
+    }
+}
+\`\`\`
+
+### 3. superpowers:systematic-debugging
+**Use when:** Encountering SSR errors, route registration issues, or unexpected behavior.
+
+**Example workflow:**
+\`\`\`
+1. Describe the symptom (e.g., "Page shows Loading...")
+2. Gather data: Check browser console, server logs, network requests
+3. Form hypothesis: "JavaScript syntax error preventing hydration"
+4. Test hypothesis: Validate JavaScript syntax
+5. Fix and verify
+\`\`\`
+
+### 4. superpowers:writing-plans
+**Use when:** Implementing complex features with multiple steps (e.g., adding authentication, database integration).
+
+**Example plan structure:**
+\`\`\`markdown
+# Add Database Integration
+
+## Task 1: Setup Database Connection
+- Add dependencies to Cargo.toml
+- Create connection pool module
+- Test connection
+
+## Task 2: Create Migrations
+- Write migration for todos table
+- Test migration
+
+## Task 3: Update Todo Store
+- Replace in-memory store with database
+- Update all route handlers
+- Test all endpoints
+\`\`\`
+
+## Common Workflows
+
+### Adding a New Feature
+
+\`\`\`
+1. Use brainstorming skill to plan the feature
+2. Create implementation plan with writing-plans skill
+3. Execute using test-driven-development
+4. Debug any issues with systematic-debugging
+5. Request code review when complete
+\`\`\`
+
+### Fixing a Bug
+
+\`\`\`
+1. Use systematic-debugging skill to investigate
+2. Form hypothesis about root cause
+3. Write test case that reproduces bug
+4. Fix the bug
+5. Verify test passes
+6. Check for similar issues
+\`\`\`
+
+### Creating New Routes
+
+\`\`\`
+1. Create file: api/feature/route.rs
+2. Add handler with #[get], #[post], etc.
+3. Add #[cfg(test)] tests for handler
+4. Run cargo run (auto-discovers route)
+5. Test endpoint with curl or browser
+6. Verify TypeScript types at /api/__types
+\`\`\`
+
+### Creating Components
+
+\`\`\`
+1. Create file: web/components/ComponentName.tsx
+2. Add 'use client' directive if interactive
+3. Implement component with async/await for data fetching
+4. Use Tailwind classes for styling
+5. Test in browser
+6. Verify SSR rendering
+\`\`\`
+
+## Virust-Specific Patterns
+
+### Route Pattern
+\`\`\`rust
+// api/feature/route.rs
+use virust_macros::{get, post};
+use axum::Json;
+use serde::{Serialize, Deserialize};
+
+#[derive(Deserialize)]
+pub struct CreateRequest {
+    pub field: String,
+}
+
+#[derive(Serialize)]
+pub struct Response {
+    pub field: String,
+}
+
+#[post]
+async fn create(Json(input): Json<CreateRequest>) -> Json<Response> {
+    Json(Response { field: input.field })
+}
+
+#[get]
+async fn list() -> Json<Vec<Response>> {
+    Json(vec![])
+}
+\`\`\`
+
+### SSR Component Pattern
+\`\`\`tsx
+// Server component (async)
+export default async function DataList() {
+  const data = await fetch('/api/data').then(r => r.json());
+
+  return (
+    <div className="container">
+      {data.map(item => (
+        <div key={item.id}>{item.name}</div>
+      ))}
+    </div>
+  );
+}
+\`\`\`
+
+\`\`\`tsx
+// Client component (interactive)
+'use client';
+
+import { useState } from 'react';
+
+export default function Form() {
+  const [value, setValue] = useState('');
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={value} onChange={e => setValue(e.target.value)} />
+    </form>
+  );
+}
+\`\`\`
+
+## Quick Reference
+
+### Start Development
+\`\`\`bash
+cargo run
+\`\`\`
+
+### Run Tests
+\`\`\`bash
+cargo test
+cargo test -- --nocapture  # See print output
+\`\`\`
+
+### Check Types
+\`\`\`bash
+curl http://localhost:3000/api/__types
+\`\`\`
+
+### Add Dependencies
+\`\`\`toml
+# Cargo.toml
+[dependencies]
+dependency = "version"
+\`\`\`
+
+### Create New Route
+\`\`\`bash
+# Create file
+touch api/feature/route.rs
+
+# Add handler
+# Cargo run will auto-discover
+\`\`\`
+"#;
+    fs::write(project_dir.join("SKILL.md"), skill_md)?;
+
     Ok(())
 }
 fn copy_template_files(project_dir: &Path, template_name: &str) -> Result<()> {

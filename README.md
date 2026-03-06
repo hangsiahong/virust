@@ -50,13 +50,29 @@ See [Installation Docs](./docs/INSTALLATION.md) for more details.
 # Basic API project
 virust init my-app
 
+# Chat application (WebSocket)
+virust init my-chat -t chat
+
+# Todo application (basic)
+virust init my-todo -t todo
+
 # SSR blog application
 virust init my-blog -t ssr-blog
 
 # SSR dashboard application
 virust init my-dashboard -t ssr-dashboard
-cd my-app
+
+# Full-stack Todo application (SSR + API)
+virust init my-app -t fullstack-todo
 ```
+
+**Available Templates:**
+- `basic` - Empty API project
+- `chat` - WebSocket chat application
+- `todo` - Basic todo REST API
+- `fullstack-todo` - Full-stack todo with SSR, React, and Tailwind CSS ⭐
+- `ssr-blog` - SSR blog example
+- `ssr-dashboard` - SSR dashboard example
 
 ### Development
 
@@ -285,6 +301,31 @@ virust/
 │ └ virust-bun          # Bun integration for SSR
 ```
 
+## AI-Assisted Development
+
+Virust is optimized for AI-assisted development with Claude Code and other AI coding assistants.
+
+### Project Documentation
+
+Every Virust project includes:
+
+- **CLAUDE.md** - Context and patterns for Claude Code when working on your project
+- **SKILL.md** - Recommended workflows and skills for common tasks
+- **Auto-discovery** - Routes and components are automatically discovered
+
+For LLM context about the Virust framework itself, see `llm.txt` in the repository root.
+
+### Recommended Workflow
+
+1. **Create project**: `virust init my-app -t fullstack-todo`
+2. **Open in Claude Code**: `cd my-app && claude-code`
+3. **Start coding**: Claude Code already knows your project structure
+4. **Use skills**: Leverage brainstorming, TDD, and systematic-debugging skills
+
+### LLM Context
+
+For external LLMs, reference `llm.txt` in the Virust repository for complete framework context.
+
 ## v0.4 Features
 
 The latest release includes:
@@ -296,6 +337,7 @@ The latest release includes:
 - **Hydration**: Automatic client-side hydration for interactivity
 - **Component HMR**: Hot module replacement for component changes
 - **Error Pages**: Development-friendly error pages for failed renders
+- **AI-Assisted Development**: CLAUDE.md and SKILL.md in every project
 
 See [v0.4 Release Notes](docs/plans/2026-03-06-virust-v0.4-release.md) for details.
 

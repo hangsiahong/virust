@@ -1,0 +1,204 @@
+# Virust - Real-time Rust Backend Framework
+
+Virust is a Rust framework optimized for AI-assisted development, featuring server-side rendering, WebSocket-first real-time communication, and filesystem-based routing.
+
+## Project Structure
+
+```
+virust/
+├ crates/
+│ ├ virust-protocol     # Shared types (RPC, HTTP, errors)
+│ ├ virust-macros       # Proc macros + TS generation
+│ ├ virust-runtime      # WebSocket + HTTP servers + SSR
+│ ├ virust-cli          # Project scaffolding (init, dev, build)
+│ ├ virust-typescript   # TypeScript code generation
+│ └ virust-bun          # Bun integration for SSR
+```
+
+## Key Technologies
+
+- **Rust**: Backend runtime and framework
+- **Axum**: HTTP web framework
+- **Bun**: JavaScript runtime for SSR
+- **React**: UI components with Server-Side Rendering
+- **Tokio**: Async runtime
+- **serde**: Serialization/deserialization
+
+## Core Features
+
+### 1. Filesystem Routing
+Routes are auto-discovered from `api/` directory:
+- `api/chat/route.rs` → `/api/chat`
+- `api/todos/[id]/route.rs` → `/api/todos/:id`
+
+### 2. Procedural Macros
+- `#[ws]` - WebSocket handlers
+- `#[get]`, `#[post]`, `#[put]`, `#[delete]` - HTTP handlers
+- `#[render_component]` - SSR component rendering
+
+### 3. Parameter Extraction
+- `#[path]` - URL path parameters
+- `#[body]` - JSON body deserialization
+- `AxumPath(id)` - Axum path extractor
+- `Json(data)` - Axum JSON extractor
+
+### 4. Server-Side Rendering (SSR)
+- Next.js-style SSR with Bun
+- React Server Components (async data fetching)
+- Client Components with hydration
+- Automatic HMR for components
+
+### 5. TypeScript Generation
+Auto-generates TypeScript types at `/api/__types`:
+- Request/Response interfaces
+- Function signatures
+- Full type safety
+
+## Development Workflow
+
+1. **Create Project**: `virust init my-app -t fullstack-todo`
+2. **Development**: `virust dev` (single port :3000)
+3. **Build**: `virust build --release`
+
+## Route Handler Examples
+
+### WebSocket Handler
+```rust
+#[ws]
+async fn chat(msg: ChatMessage) -> ChatResponse {
+    ChatResponse {
+        ok: true,
+        message: format!("{}: {}", msg.username, msg.message),
+    }
+}
+```
+
+### HTTP Handler with Parameters
+```rust
+#[post]
+async fn create_todo(#[body] payload: CreateTodoRequest) -> TodoResponse {
+    TodoResponse {
+        id: uuid::Uuid::new_v4().to_string(),
+        title: payload.title,
+        completed: false,
+    }
+}
+
+#[get]
+async fn get_todo(#[path] id: String) -> TodoResponse {
+    // Return todo by id
+}
+```
+
+### SSR Handler
+```rust
+#[get]
+#[render_component("HomePage")]
+async fn index() -> RenderedHtml {
+    RenderedHtml::new("HomePage")
+}
+```
+
+## Frontend Integration
+
+Frontend files go in `web/`:
+- `components/` - React components (server and client)
+- `main.js` - Client entry point
+- `styles.css` - Styles (Tailwind-like utility classes supported)
+
+Components are server-rendered by default:
+```jsx
+// web/components/TodoList.jsx
+export default async function TodoList() {
+  const todos = await fetch('/api/todos').then(r => r.json());
+
+  return (
+    <div className="max-w-3xl mx-auto p-6">
+      <h1>Todo List</h1>
+      {todos.map(todo => (
+        <div key={todo.id}>{todo.title}</div>
+      ))}
+    </div>
+  );
+}
+```
+
+## Project Templates
+
+- **basic** - Empty API project
+- **chat** - WebSocket chat application
+- **todo** - Basic todo REST API
+- **fullstack-todo** - Full-stack with SSR, React, Tailwind CSS ⭐
+- **ssr-blog** - SSR blog example
+- **ssr-dashboard** - SSR dashboard example
+
+## Type Safety
+
+All route handlers automatically generate TypeScript types:
+- Request body types from `#[body]` parameters
+- Response types from return types
+- Path parameters from `#[path]` attributes
+
+Access at: `http://localhost:3000/api/__types`
+
+## Hot Module Replacement
+
+- Frontend changes in `web/` → auto page reload
+- Backend changes in `api/` → auto recompile and restart
+- Component changes → automatic SSR re-render
+
+## Common Patterns
+
+### Shared Types Between Routes
+```rust
+// api/todos/route.rs
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TodoResponse {
+    pub id: String,
+    pub title: String,
+}
+
+// api/todos/[id]/route.rs
+pub use crate::api::todos::route::{TodoResponse, get_todo_store};
+```
+
+### State Management
+```rust
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+type TodoStore = Arc<RwLock<Vec<TodoResponse>>>;
+
+pub fn get_todo_store() -> TodoStore {
+    use std::sync::OnceLock;
+    static STORE: OnceLock<TodoStore> = OnceLock::new();
+    STORE.get_or_init(|| {
+        Arc::new(RwLock::new(Vec::new()))
+    }).clone()
+}
+```
+
+### Error Handling in SSR
+```rust
+let rendered = RenderedHtml::new("Component");
+match rendered.render().await {
+    Ok(html) => Html(html),
+    Err(e) => {
+        eprintln!("SSR Error: {}", e);
+        Html(format!("<h1>Error: {}</h1>", e))
+    }
+}
+```
+
+## Testing
+
+Run tests with:
+```bash
+cargo test
+```
+
+Integration tests should verify:
+- Route responses
+- WebSocket message handling
+- SSR rendering output
+- TypeScript type generation
