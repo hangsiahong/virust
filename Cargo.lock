@@ -1700,6 +1700,7 @@ dependencies = [
 name = "virust-macros"
 version = "0.1.0"
 dependencies = [
+ "axum",
  "inventory",
  "proc-macro2",
  "quote",

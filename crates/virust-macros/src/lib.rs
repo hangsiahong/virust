@@ -145,13 +145,22 @@ pub fn ws(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = input.sig.ident.clone();
-    let _fn_name_str = fn_name.to_string();
+    let fn_name_str = fn_name.to_string();
+    let vis = &input.vis;
 
     // Parse route arguments to extract #[path] and #[body] metadata
-    let _route_args = parse_route_args(&input.sig.inputs);
+    let route_args = parse_route_args(&input.sig.inputs);
+
+    // Filter for path parameters
+    let path_params: Vec<_> = route_args.iter()
+        .filter_map(|arg| match arg {
+            RouteArg::Path(p) => Some(p),
+            _ => None,
+        })
+        .collect();
 
     // Strip #[path] and #[body] attributes from function parameters
-    let input = strip_arg_attributes(input);
+    let original_fn = strip_arg_attributes(input.clone());
 
     // Check if function name is an HTTP method
     let http_method = match fn_name.to_string().to_uppercase().as_str() {
@@ -173,13 +182,56 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // Extract type information
     let (_input_type, _output_type) = extract_function_types(&input);
 
-    let expanded = quote! {
-        #input
+    // Generate the expanded code
+    let expanded = if !path_params.is_empty() {
+        // Generate path extractor wrapper
+        let wrapper_name = format!("{}_wrapper", fn_name_str);
+        let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
-        inventory::submit!(virust_runtime::RouteEntry {
-            path: stringify!(#fn_name),
-            route_type: #route_type,
-        });
+        // Generate parameter declarations for wrapper signature
+        let wrapper_params: Vec<_> = path_params.iter()
+            .map(|p| {
+                let name = &p.name;
+                let typ = &p.typ;
+                quote! { #name: #typ }
+            })
+            .collect();
+
+        // Generate parameter names for extraction and call
+        let param_names: Vec<_> = path_params.iter()
+            .map(|p| &p.name)
+            .collect();
+
+        // Get the return type from the original function
+        let return_type = &original_fn.sig.output;
+
+        quote! {
+            // Original function (stripped of attributes)
+            #original_fn
+
+            // Path extractor wrapper
+            #vis async fn #wrapper_ident(
+                #(#wrapper_params),*
+            ) #return_type {
+                let path = axum::extract::Path((#(#param_names),*));
+                let (#(#param_names),*) = path.0;
+                #fn_name(#(#param_names),*).await
+            }
+
+            inventory::submit!(virust_runtime::RouteEntry {
+                path: stringify!(#fn_name),
+                route_type: #route_type,
+            });
+        }
+    } else {
+        quote! {
+            #original_fn
+
+            inventory::submit!(virust_runtime::RouteEntry {
+                path: stringify!(#fn_name),
+                route_type: #route_type,
+            });
+        }
     };
 
     TokenStream::from(expanded)
@@ -189,24 +241,76 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = input.sig.ident.clone();
-    let _fn_name_str = fn_name.to_string();
+    let fn_name_str = fn_name.to_string();
+    let vis = &input.vis;
 
     // Parse route arguments to extract #[path] and #[body] metadata
-    let _route_args = parse_route_args(&input.sig.inputs);
+    let route_args = parse_route_args(&input.sig.inputs);
+
+    // Filter for path parameters
+    let path_params: Vec<_> = route_args.iter()
+        .filter_map(|arg| match arg {
+            RouteArg::Path(p) => Some(p),
+            _ => None,
+        })
+        .collect();
 
     // Strip #[path] and #[body] attributes from function parameters
-    let input = strip_arg_attributes(input);
+    let original_fn = strip_arg_attributes(input.clone());
 
     // Extract type information
     let (_input_type, _output_type) = extract_function_types(&input);
 
-    let expanded = quote! {
-        #input
+    // Generate the expanded code
+    let expanded = if !path_params.is_empty() {
+        // Generate path extractor wrapper
+        let wrapper_name = format!("{}_wrapper", fn_name_str);
+        let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
-        inventory::submit!(virust_runtime::RouteEntry {
-            path: stringify!(#fn_name),
-            route_type: virust_runtime::RouteType::HttpPost,
-        });
+        // Generate parameter declarations for wrapper signature
+        let wrapper_params: Vec<_> = path_params.iter()
+            .map(|p| {
+                let name = &p.name;
+                let typ = &p.typ;
+                quote! { #name: #typ }
+            })
+            .collect();
+
+        // Generate parameter names for extraction and call
+        let param_names: Vec<_> = path_params.iter()
+            .map(|p| &p.name)
+            .collect();
+
+        // Get the return type from the original function
+        let return_type = &original_fn.sig.output;
+
+        quote! {
+            // Original function (stripped of attributes)
+            #original_fn
+
+            // Path extractor wrapper
+            #vis async fn #wrapper_ident(
+                #(#wrapper_params),*
+            ) #return_type {
+                let path = axum::extract::Path((#(#param_names),*));
+                let (#(#param_names),*) = path.0;
+                #fn_name(#(#param_names),*).await
+            }
+
+            inventory::submit!(virust_runtime::RouteEntry {
+                path: stringify!(#fn_name),
+                route_type: virust_runtime::RouteType::HttpPost,
+            });
+        }
+    } else {
+        quote! {
+            #original_fn
+
+            inventory::submit!(virust_runtime::RouteEntry {
+                path: stringify!(#fn_name),
+                route_type: virust_runtime::RouteType::HttpPost,
+            });
+        }
     };
 
     TokenStream::from(expanded)
@@ -216,24 +320,76 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = input.sig.ident.clone();
-    let _fn_name_str = fn_name.to_string();
+    let fn_name_str = fn_name.to_string();
+    let vis = &input.vis;
 
     // Parse route arguments to extract #[path] and #[body] metadata
-    let _route_args = parse_route_args(&input.sig.inputs);
+    let route_args = parse_route_args(&input.sig.inputs);
+
+    // Filter for path parameters
+    let path_params: Vec<_> = route_args.iter()
+        .filter_map(|arg| match arg {
+            RouteArg::Path(p) => Some(p),
+            _ => None,
+        })
+        .collect();
 
     // Strip #[path] and #[body] attributes from function parameters
-    let input = strip_arg_attributes(input);
+    let original_fn = strip_arg_attributes(input.clone());
 
     // Extract type information
     let (_input_type, _output_type) = extract_function_types(&input);
 
-    let expanded = quote! {
-        #input
+    // Generate the expanded code
+    let expanded = if !path_params.is_empty() {
+        // Generate path extractor wrapper
+        let wrapper_name = format!("{}_wrapper", fn_name_str);
+        let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
-        inventory::submit!(virust_runtime::RouteEntry {
-            path: stringify!(#fn_name),
-            route_type: virust_runtime::RouteType::HttpPut,
-        });
+        // Generate parameter declarations for wrapper signature
+        let wrapper_params: Vec<_> = path_params.iter()
+            .map(|p| {
+                let name = &p.name;
+                let typ = &p.typ;
+                quote! { #name: #typ }
+            })
+            .collect();
+
+        // Generate parameter names for extraction and call
+        let param_names: Vec<_> = path_params.iter()
+            .map(|p| &p.name)
+            .collect();
+
+        // Get the return type from the original function
+        let return_type = &original_fn.sig.output;
+
+        quote! {
+            // Original function (stripped of attributes)
+            #original_fn
+
+            // Path extractor wrapper
+            #vis async fn #wrapper_ident(
+                #(#wrapper_params),*
+            ) #return_type {
+                let path = axum::extract::Path((#(#param_names),*));
+                let (#(#param_names),*) = path.0;
+                #fn_name(#(#param_names),*).await
+            }
+
+            inventory::submit!(virust_runtime::RouteEntry {
+                path: stringify!(#fn_name),
+                route_type: virust_runtime::RouteType::HttpPut,
+            });
+        }
+    } else {
+        quote! {
+            #original_fn
+
+            inventory::submit!(virust_runtime::RouteEntry {
+                path: stringify!(#fn_name),
+                route_type: virust_runtime::RouteType::HttpPut,
+            });
+        }
     };
 
     TokenStream::from(expanded)
@@ -243,24 +399,76 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = input.sig.ident.clone();
-    let _fn_name_str = fn_name.to_string();
+    let fn_name_str = fn_name.to_string();
+    let vis = &input.vis;
 
     // Parse route arguments to extract #[path] and #[body] metadata
-    let _route_args = parse_route_args(&input.sig.inputs);
+    let route_args = parse_route_args(&input.sig.inputs);
+
+    // Filter for path parameters
+    let path_params: Vec<_> = route_args.iter()
+        .filter_map(|arg| match arg {
+            RouteArg::Path(p) => Some(p),
+            _ => None,
+        })
+        .collect();
 
     // Strip #[path] and #[body] attributes from function parameters
-    let input = strip_arg_attributes(input);
+    let original_fn = strip_arg_attributes(input.clone());
 
     // Extract type information
     let (_input_type, _output_type) = extract_function_types(&input);
 
-    let expanded = quote! {
-        #input
+    // Generate the expanded code
+    let expanded = if !path_params.is_empty() {
+        // Generate path extractor wrapper
+        let wrapper_name = format!("{}_wrapper", fn_name_str);
+        let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
-        inventory::submit!(virust_runtime::RouteEntry {
-            path: stringify!(#fn_name),
-            route_type: virust_runtime::RouteType::HttpDelete,
-        });
+        // Generate parameter declarations for wrapper signature
+        let wrapper_params: Vec<_> = path_params.iter()
+            .map(|p| {
+                let name = &p.name;
+                let typ = &p.typ;
+                quote! { #name: #typ }
+            })
+            .collect();
+
+        // Generate parameter names for extraction and call
+        let param_names: Vec<_> = path_params.iter()
+            .map(|p| &p.name)
+            .collect();
+
+        // Get the return type from the original function
+        let return_type = &original_fn.sig.output;
+
+        quote! {
+            // Original function (stripped of attributes)
+            #original_fn
+
+            // Path extractor wrapper
+            #vis async fn #wrapper_ident(
+                #(#wrapper_params),*
+            ) #return_type {
+                let path = axum::extract::Path((#(#param_names),*));
+                let (#(#param_names),*) = path.0;
+                #fn_name(#(#param_names),*).await
+            }
+
+            inventory::submit!(virust_runtime::RouteEntry {
+                path: stringify!(#fn_name),
+                route_type: virust_runtime::RouteType::HttpDelete,
+            });
+        }
+    } else {
+        quote! {
+            #original_fn
+
+            inventory::submit!(virust_runtime::RouteEntry {
+                path: stringify!(#fn_name),
+                route_type: virust_runtime::RouteType::HttpDelete,
+            });
+        }
     };
 
     TokenStream::from(expanded)
