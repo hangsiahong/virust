@@ -1089,7 +1089,7 @@ pub fn render_component(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * `revalidate` - Optional time in seconds for ISR. If specified, the
 ///   page will be regenerated at runtime after this interval.
 #[proc_macro_attribute]
-pub fn ssg(attrs: TokenStream, input: TokenStream) -> TokenStream {
+pub fn ssg(_attrs: TokenStream, input: TokenStream) -> TokenStream {
     // The ssg attribute is a marker that gets parsed by the build system
     // It doesn't need to generate any code - the discovery system
     // parses the source files to find #[ssg] attributes
