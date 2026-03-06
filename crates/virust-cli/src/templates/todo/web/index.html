@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virust Todo App</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Virust Todo Demo</h1>
+
+        <div class="todo-form">
+            <input type="text" id="title" placeholder="Todo title" />
+            <input type="text" id="description" placeholder="Description (optional)" />
+            <button onclick="createTodo()">Add Todo</button>
+        </div>
+
+        <div id="todos"></div>
+    </div>
+
+    <script type="module" src="/main.js"></script>
+    <script>
+        // HMR - Auto-injected by Virust dev mode
+        if (window.location.port === '3000') {
+            const ws = new WebSocket('ws://localhost:3000/ws');
+            ws.onmessage = (msg) => {
+                if (msg.data === 'reload') location.reload();
+            };
+        }
+    </script>
+</body>
+</html>
