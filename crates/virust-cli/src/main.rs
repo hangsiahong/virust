@@ -1,8 +1,8 @@
 mod build;
 mod dev;
+mod dev_orchestrator;
 mod init;
 
-use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::process;
 
@@ -20,10 +20,7 @@ enum Commands {
         #[arg(short, long)]
         release: bool,
     },
-    Dev {
-        #[arg(short, long, default_value = "3000")]
-        port: u16,
-    },
+    Dev,
     Init {
         /// Project name
         name: String,
@@ -40,8 +37,8 @@ fn main() {
         Commands::Build { release } => {
             build::execute(release)
         }
-        Commands::Dev { port } => {
-            dev::execute(port)
+        Commands::Dev => {
+            tokio::runtime::Runtime::new().unwrap().block_on(dev::execute())
         }
         Commands::Init { name, template } => {
             init::execute(&name, &template)

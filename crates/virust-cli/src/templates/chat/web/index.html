@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Virust Chat App</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Virust Chat Demo</h1>
+
+        <div class="chat-form">
+            <input type="text" id="username" placeholder="Your username" />
+            <input type="text" id="message" placeholder="Type a message..." />
+            <button onclick="sendMessage()">Send</button>
+        </div>
+
+        <div id="messages"></div>
+    </div>
+
+    <script type="module" src="/main.js"></script>
+    <script>
+        // HMR - Auto-injected by Virust dev mode
+        if (window.location.port === '3000') {
+            const ws = new WebSocket('ws://localhost:3000/ws');
+            ws.onmessage = (msg) => {
+                if (msg.data === 'reload') location.reload();
+            };
+        }
+    </script>
+</body>
+</html>

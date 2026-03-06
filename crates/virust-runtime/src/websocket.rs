@@ -1,12 +1,16 @@
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
+        State,
     },
     response::IntoResponse,
 };
-use futures_util::StreamExt;
+use crate::hmr::HmrWatcher;
 
-pub async fn ws_upgrade(ws: WebSocketUpgrade) -> impl IntoResponse {
+pub async fn ws_upgrade(
+    ws: WebSocketUpgrade,
+    State(_hmr): State<HmrWatcher>,
+) -> impl IntoResponse {
     ws.on_upgrade(handle_socket)
 }
 
