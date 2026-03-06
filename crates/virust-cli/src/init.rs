@@ -1202,8 +1202,9 @@ pub async fn create_todo(#[body] input: CreateTodoRequest) -> TodoResponse {
     }
 }
 "#;
-    fs::create_dir_all(project_dir.join("src/api/todos"))?;
-    fs::write(project_dir.join("src/api/todos/route.rs"), todos_list)?;
+
+    // Write todos.rs file
+    fs::write(project_dir.join("src/api/todos.rs"), todos_list)?;
 
     // Create todos_id route (SSR with path parameter)
     let todos_id = r#"use virust_macros::{get, put, delete, render_component};
@@ -1258,7 +1259,7 @@ pub async fn delete_todo(#[path] id: String) -> String {
 }
 "#;
     fs::create_dir_all(project_dir.join("src/api/todos_id"))?;
-    fs::write(project_dir.join("src/api/todos_id/route.rs"), todos_id)?;
+    fs::write(project_dir.join("src/api/todos_id.rs"), todos_id)?;
 
     // Create web/components directory with TypeScript/TSX components
     fs::create_dir_all(project_dir.join("web/components"))?;
