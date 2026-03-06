@@ -159,6 +159,14 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Filter for body parameters
+    let body_params: Vec<_> = route_args.iter()
+        .filter_map(|arg| match arg {
+            RouteArg::Body(b) => Some(b),
+            _ => None,
+        })
+        .collect();
+
     // Strip #[path] and #[body] attributes from function parameters
     let original_fn = strip_arg_attributes(input.clone());
 
@@ -183,7 +191,7 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let (_input_type, _output_type) = extract_function_types(&input);
 
     // Generate the expanded code
-    let expanded = if !path_params.is_empty() {
+    let expanded = if !path_params.is_empty() || !body_params.is_empty() {
         // Generate path extractor wrapper
         let wrapper_name = format!("{}_wrapper", fn_name_str);
         let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
@@ -195,27 +203,60 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 let typ = &p.typ;
                 quote! { #name: #typ }
             })
+            .chain(body_params.iter().map(|b| {
+                let name = &b.name;
+                let typ = &b.typ;
+                quote! { #name: #typ }
+            }))
             .collect();
 
         // Generate parameter names for extraction and call
         let param_names: Vec<_> = path_params.iter()
             .map(|p| &p.name)
+            .chain(body_params.iter().map(|b| &b.name))
             .collect();
 
         // Get the return type from the original function
         let return_type = &original_fn.sig.output;
 
+        // Generate extractors based on what parameters are present
+        let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
+            // Both path and body parameters
+            let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
+            let body_names: Vec<_> = body_params.iter().map(|b| &b.name).collect();
+            let code = quote! {
+                let path = axum::extract::Path((#(#path_names),*));
+                let (#(#path_names),*) = path.0;
+                let json = axum::Json((#(#body_names),*));
+                let (#(#body_names),*) = json.0;
+            };
+            (code, param_names)
+        } else if !path_params.is_empty() {
+            // Only path parameters
+            let code = quote! {
+                let path = axum::extract::Path((#(#param_names),*));
+                let (#(#param_names),*) = path.0;
+            };
+            (code, param_names)
+        } else {
+            // Only body parameters
+            let code = quote! {
+                let json = axum::Json((#(#param_names),*));
+                let (#(#param_names),*) = json.0;
+            };
+            (code, param_names)
+        };
+
         quote! {
             // Original function (stripped of attributes)
             #original_fn
 
-            // Path extractor wrapper
+            // Extractor wrapper
             #vis async fn #wrapper_ident(
                 #(#wrapper_params),*
             ) #return_type {
-                let path = axum::extract::Path((#(#param_names),*));
-                let (#(#param_names),*) = path.0;
-                #fn_name(#(#param_names),*).await
+                #extractor_code
+                #fn_name(#(#all_params),*).await
             }
 
             inventory::submit!(virust_runtime::RouteEntry {
@@ -255,6 +296,14 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Filter for body parameters
+    let body_params: Vec<_> = route_args.iter()
+        .filter_map(|arg| match arg {
+            RouteArg::Body(b) => Some(b),
+            _ => None,
+        })
+        .collect();
+
     // Strip #[path] and #[body] attributes from function parameters
     let original_fn = strip_arg_attributes(input.clone());
 
@@ -262,7 +311,7 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let (_input_type, _output_type) = extract_function_types(&input);
 
     // Generate the expanded code
-    let expanded = if !path_params.is_empty() {
+    let expanded = if !path_params.is_empty() || !body_params.is_empty() {
         // Generate path extractor wrapper
         let wrapper_name = format!("{}_wrapper", fn_name_str);
         let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
@@ -274,27 +323,60 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 let typ = &p.typ;
                 quote! { #name: #typ }
             })
+            .chain(body_params.iter().map(|b| {
+                let name = &b.name;
+                let typ = &b.typ;
+                quote! { #name: #typ }
+            }))
             .collect();
 
         // Generate parameter names for extraction and call
         let param_names: Vec<_> = path_params.iter()
             .map(|p| &p.name)
+            .chain(body_params.iter().map(|b| &b.name))
             .collect();
 
         // Get the return type from the original function
         let return_type = &original_fn.sig.output;
 
+        // Generate extractors based on what parameters are present
+        let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
+            // Both path and body parameters
+            let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
+            let body_names: Vec<_> = body_params.iter().map(|b| &b.name).collect();
+            let code = quote! {
+                let path = axum::extract::Path((#(#path_names),*));
+                let (#(#path_names),*) = path.0;
+                let json = axum::Json((#(#body_names),*));
+                let (#(#body_names),*) = json.0;
+            };
+            (code, param_names)
+        } else if !path_params.is_empty() {
+            // Only path parameters
+            let code = quote! {
+                let path = axum::extract::Path((#(#param_names),*));
+                let (#(#param_names),*) = path.0;
+            };
+            (code, param_names)
+        } else {
+            // Only body parameters
+            let code = quote! {
+                let json = axum::Json((#(#param_names),*));
+                let (#(#param_names),*) = json.0;
+            };
+            (code, param_names)
+        };
+
         quote! {
             // Original function (stripped of attributes)
             #original_fn
 
-            // Path extractor wrapper
+            // Extractor wrapper
             #vis async fn #wrapper_ident(
                 #(#wrapper_params),*
             ) #return_type {
-                let path = axum::extract::Path((#(#param_names),*));
-                let (#(#param_names),*) = path.0;
-                #fn_name(#(#param_names),*).await
+                #extractor_code
+                #fn_name(#(#all_params),*).await
             }
 
             inventory::submit!(virust_runtime::RouteEntry {
@@ -334,6 +416,14 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Filter for body parameters
+    let body_params: Vec<_> = route_args.iter()
+        .filter_map(|arg| match arg {
+            RouteArg::Body(b) => Some(b),
+            _ => None,
+        })
+        .collect();
+
     // Strip #[path] and #[body] attributes from function parameters
     let original_fn = strip_arg_attributes(input.clone());
 
@@ -341,7 +431,7 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let (_input_type, _output_type) = extract_function_types(&input);
 
     // Generate the expanded code
-    let expanded = if !path_params.is_empty() {
+    let expanded = if !path_params.is_empty() || !body_params.is_empty() {
         // Generate path extractor wrapper
         let wrapper_name = format!("{}_wrapper", fn_name_str);
         let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
@@ -353,27 +443,60 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 let typ = &p.typ;
                 quote! { #name: #typ }
             })
+            .chain(body_params.iter().map(|b| {
+                let name = &b.name;
+                let typ = &b.typ;
+                quote! { #name: #typ }
+            }))
             .collect();
 
         // Generate parameter names for extraction and call
         let param_names: Vec<_> = path_params.iter()
             .map(|p| &p.name)
+            .chain(body_params.iter().map(|b| &b.name))
             .collect();
 
         // Get the return type from the original function
         let return_type = &original_fn.sig.output;
 
+        // Generate extractors based on what parameters are present
+        let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
+            // Both path and body parameters
+            let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
+            let body_names: Vec<_> = body_params.iter().map(|b| &b.name).collect();
+            let code = quote! {
+                let path = axum::extract::Path((#(#path_names),*));
+                let (#(#path_names),*) = path.0;
+                let json = axum::Json((#(#body_names),*));
+                let (#(#body_names),*) = json.0;
+            };
+            (code, param_names)
+        } else if !path_params.is_empty() {
+            // Only path parameters
+            let code = quote! {
+                let path = axum::extract::Path((#(#param_names),*));
+                let (#(#param_names),*) = path.0;
+            };
+            (code, param_names)
+        } else {
+            // Only body parameters
+            let code = quote! {
+                let json = axum::Json((#(#param_names),*));
+                let (#(#param_names),*) = json.0;
+            };
+            (code, param_names)
+        };
+
         quote! {
             // Original function (stripped of attributes)
             #original_fn
 
-            // Path extractor wrapper
+            // Extractor wrapper
             #vis async fn #wrapper_ident(
                 #(#wrapper_params),*
             ) #return_type {
-                let path = axum::extract::Path((#(#param_names),*));
-                let (#(#param_names),*) = path.0;
-                #fn_name(#(#param_names),*).await
+                #extractor_code
+                #fn_name(#(#all_params),*).await
             }
 
             inventory::submit!(virust_runtime::RouteEntry {
@@ -413,6 +536,14 @@ pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Filter for body parameters
+    let body_params: Vec<_> = route_args.iter()
+        .filter_map(|arg| match arg {
+            RouteArg::Body(b) => Some(b),
+            _ => None,
+        })
+        .collect();
+
     // Strip #[path] and #[body] attributes from function parameters
     let original_fn = strip_arg_attributes(input.clone());
 
@@ -420,7 +551,7 @@ pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let (_input_type, _output_type) = extract_function_types(&input);
 
     // Generate the expanded code
-    let expanded = if !path_params.is_empty() {
+    let expanded = if !path_params.is_empty() || !body_params.is_empty() {
         // Generate path extractor wrapper
         let wrapper_name = format!("{}_wrapper", fn_name_str);
         let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
@@ -432,27 +563,60 @@ pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 let typ = &p.typ;
                 quote! { #name: #typ }
             })
+            .chain(body_params.iter().map(|b| {
+                let name = &b.name;
+                let typ = &b.typ;
+                quote! { #name: #typ }
+            }))
             .collect();
 
         // Generate parameter names for extraction and call
         let param_names: Vec<_> = path_params.iter()
             .map(|p| &p.name)
+            .chain(body_params.iter().map(|b| &b.name))
             .collect();
 
         // Get the return type from the original function
         let return_type = &original_fn.sig.output;
 
+        // Generate extractors based on what parameters are present
+        let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
+            // Both path and body parameters
+            let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
+            let body_names: Vec<_> = body_params.iter().map(|b| &b.name).collect();
+            let code = quote! {
+                let path = axum::extract::Path((#(#path_names),*));
+                let (#(#path_names),*) = path.0;
+                let json = axum::Json((#(#body_names),*));
+                let (#(#body_names),*) = json.0;
+            };
+            (code, param_names)
+        } else if !path_params.is_empty() {
+            // Only path parameters
+            let code = quote! {
+                let path = axum::extract::Path((#(#param_names),*));
+                let (#(#param_names),*) = path.0;
+            };
+            (code, param_names)
+        } else {
+            // Only body parameters
+            let code = quote! {
+                let json = axum::Json((#(#param_names),*));
+                let (#(#param_names),*) = json.0;
+            };
+            (code, param_names)
+        };
+
         quote! {
             // Original function (stripped of attributes)
             #original_fn
 
-            // Path extractor wrapper
+            // Extractor wrapper
             #vis async fn #wrapper_ident(
                 #(#wrapper_params),*
             ) #return_type {
-                let path = axum::extract::Path((#(#param_names),*));
-                let (#(#param_names),*) = path.0;
-                #fn_name(#(#param_names),*).await
+                #extractor_code
+                #fn_name(#(#all_params),*).await
             }
 
             inventory::submit!(virust_runtime::RouteEntry {
