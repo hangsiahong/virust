@@ -55,7 +55,10 @@ impl ComponentRegistry {
                                 );
                                 continue;
                             }
-                            self.components.insert(name, path);
+                            // Canonicalize to absolute path for Bun renderer
+                            let abs_path = fs::canonicalize(&path)
+                                .map_err(|e| anyhow::anyhow!("Failed to canonicalize {:?}: {}", path, e))?;
+                            self.components.insert(name, abs_path);
                         }
                     }
                 }

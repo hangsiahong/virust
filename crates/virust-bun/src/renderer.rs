@@ -16,6 +16,8 @@ pub struct BunRenderer {
     stdin: Option<ChildStdin>,
     /// Bun process stdout for receiving render responses
     stdout: Option<BufReader<ChildStdout>>,
+    /// Path to the renderer.js script
+    renderer_path: String,
 }
 
 impl BunRenderer {
@@ -24,10 +26,17 @@ impl BunRenderer {
     /// This spawns `bun run /opt/virust/bun/renderer.js` with piped stdin/stdout
     /// for communication with the Bun renderer process.
     pub fn new() -> Result<Self> {
+        Self::with_path("/opt/virust/bun/renderer.js")
+    }
+
+    /// Create a new BunRenderer with a custom renderer path
+    ///
+    /// This is useful for testing with a local renderer.js file
+    pub fn with_path(renderer_path: &str) -> Result<Self> {
         // Spawn the Bun process with piped stdin/stdout
         let mut bun_process = Command::new("bun")
             .arg("run")
-            .arg("/opt/virust/bun/renderer.js")
+            .arg(renderer_path)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -42,6 +51,7 @@ impl BunRenderer {
             component_registry: ComponentRegistry::new(),
             stdin,
             stdout,
+            renderer_path: renderer_path.to_string(),
         })
     }
 
