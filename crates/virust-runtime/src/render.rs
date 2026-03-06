@@ -1,6 +1,20 @@
 use serde_json::Value;
 use axum::response::{Html, IntoResponse};
 
+/// HTML response for SSR-rendered components
+///
+/// # Security
+///
+/// - `component_name` is derived from `#[render_component("Name")]` macro attributes
+///   and is always a compile-time constant, not user input
+/// - `props` are serialized as JSON; note that this placeholder implementation
+///   does not escape `</script>` sequences - this will be addressed in Task 10
+///   when actual Bun rendering is implemented
+///
+/// # Note
+///
+/// This is a placeholder implementation. Task 10 will replace the `IntoResponse`
+/// implementation with actual Bun-based SSR rendering.
 pub struct RenderedHtml {
     pub component_name: String,
     pub props: Value,
@@ -24,8 +38,10 @@ impl RenderedHtml {
 
 impl IntoResponse for RenderedHtml {
     fn into_response(self) -> axum::response::Response {
-        // For now, return a placeholder
-        // Will be replaced with actual SSR in Task 10
+        // SECURITY: This is a placeholder implementation.
+        // Task 10 will replace this with actual Bun rendering which doesn't have
+        // the script breakout issue. The component_name is trusted (compile-time
+        // constant from macros) so XSS is not a concern there.
         let html = format!(
             r#"<!DOCTYPE html>
 <html>
