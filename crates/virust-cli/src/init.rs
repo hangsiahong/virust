@@ -66,6 +66,7 @@ uuid = {{ version = "1.0", features = ["v4"] }}
     match template {
         "chat" => setup_chat_template(project_dir)?,
         "todo" => setup_todo_template(project_dir)?,
+        "ssr-blog" => setup_ssr_blog_template(project_dir)?,
         _ => setup_basic_template(project_dir)?,
     }
 
@@ -538,6 +539,178 @@ pub async fn delete_todo(#[path] id: String) -> String {
 
     // Copy web files from template
     copy_template_files(project_dir, "todo")?;
+
+    Ok(())
+}
+
+fn setup_ssr_blog_template(project_dir: &Path) -> Result<()> {
+    // Create lib.rs
+    let lib_rs = r#"pub mod api;
+"#;
+    fs::write(project_dir.join("src/lib.rs"), lib_rs)?;
+
+    // Create api/mod.rs
+    let api_mod = r#"pub mod route;
+
+// This function is called by the runtime to register routes
+pub fn register_routes(router: axum::Router) -> axum::Router {
+    use axum::routing::get;
+
+    // Register home page route with SSR
+    router.route("/", get(route::home_wrapper))
+}
+"#;
+    fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
+
+    // Create api/route.rs with SSR implementation
+    let route_rs = r#"use virust_macros::{get, render_component};
+use virust_runtime::RenderedHtml;
+
+/// Home page with server-side rendering
+#[get]
+#[render_component("HomePage")]
+pub async fn home() -> RenderedHtml {
+    RenderedHtml::new("HomePage")
+}
+"#;
+    fs::write(project_dir.join("src/api/route.rs"), route_rs)?;
+
+    // Create web/components directory
+    fs::create_dir_all(project_dir.join("web/components"))?;
+
+    // Create HomePage.jsx component
+    let home_page_jsx = r#"// HomePage.jsx - Server-side rendered blog home page
+export default async function HomePage() {
+  // This component is rendered on the server
+  // In a real blog, you might fetch posts here
+
+  return (
+    <div style={{
+      maxWidth: '800px',
+      margin: '50px auto',
+      padding: '20px',
+      fontFamily: 'system-ui, -apple-system, sans-serif'
+    }}>
+      <header style={{
+        marginBottom: '40px',
+        paddingBottom: '20px',
+        borderBottom: '1px solid #eaeaea'
+      }}>
+        <h1 style={{ fontSize: '2.5rem', marginBottom: '10px' }}>
+          Welcome to My Blog
+        </h1>
+        <p style={{ color: '#666', fontSize: '1.1rem' }}>
+          Built with Virust SSR
+        </p>
+      </header>
+
+      <main>
+        <section style={{ marginBottom: '40px' }}>
+          <h2 style={{ fontSize: '1.8rem', marginBottom: '20px' }}>
+            Latest Posts
+          </h2>
+
+          <article style={{
+            padding: '20px',
+            background: '#f9f9f9',
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}>
+            <h3 style={{ fontSize: '1.3rem', marginBottom: '10px' }}>
+              Getting Started with Virust
+            </h3>
+            <p style={{ color: '#666', lineHeight: '1.6' }}>
+              This is a server-side rendered blog post. The HTML is generated on the server
+              and sent to the browser, providing fast initial page loads and excellent SEO.
+            </p>
+            <div style={{ marginTop: '15px', fontSize: '0.9rem', color: '#888' }}>
+              Posted on March 6, 2026
+            </div>
+          </article>
+
+          <article style={{
+            padding: '20px',
+            background: '#f9f9f9',
+            borderRadius: '8px',
+            marginBottom: '20px'
+          }}>
+            <h3 style={{ fontSize: '1.3rem', marginBottom: '10px' }}>
+              Server-Side Rendering Benefits
+            </h3>
+            <p style={{ color: '#666', lineHeight: '1.6' }}>
+              SSR provides better SEO, faster initial page loads, and improved performance
+              on slower devices. Virust makes it easy to build SSR applications with Rust.
+            </p>
+            <div style={{ marginTop: '15px', fontSize: '0.9rem', color: '#888' }}>
+              Posted on March 5, 2026
+            </div>
+          </article>
+        </section>
+
+        <section style={{
+          padding: '30px',
+          background: '#f0f7ff',
+          borderRadius: '8px',
+          textAlign: 'center'
+        }}>
+          <h3 style={{ fontSize: '1.4rem', marginBottom: '10px' }}>
+            Start Building Your Blog
+          </h3>
+          <p style={{ color: '#666', marginBottom: '15px' }}>
+            Add your blog posts in src/api/route.rs and create components in web/components/
+          </p>
+        </section>
+      </main>
+
+      <footer style={{
+        marginTop: '60px',
+        paddingTop: '20px',
+        borderTop: '1px solid #eaeaea',
+        textAlign: 'center',
+        color: '#888'
+      }}>
+        <p>© 2026 My Blog. Built with Virust.</p>
+      </footer>
+    </div>
+  );
+}
+"#;
+    fs::write(project_dir.join("web/components/HomePage.jsx"), home_page_jsx)?;
+
+    // Create web/index.html
+    let index_html = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Blog - Virust SSR</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #fafafa;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">{{SSR_CONTENT}}</div>
+    <script type="module" src="/main.js"></script>
+</body>
+</html>
+"#;
+    fs::write(project_dir.join("web/index.html"), index_html)?;
+
+    // Create web/main.js
+    let main_js = r#"console.log('Virust SSR blog initialized');
+
+// The page is already rendered on the server
+// You can add client-side interactivity here
+"#;
+    fs::write(project_dir.join("web/main.js"), main_js)?;
 
     Ok(())
 }
