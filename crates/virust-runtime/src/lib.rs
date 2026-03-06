@@ -13,7 +13,7 @@ use http::create_http_router;
 use websocket::ws_upgrade;
 pub use watcher::create_watcher;
 pub use registry::{RouteRegistry, HttpHandler, WsHandler, TypeDefinition, RouteType, RouteEntry, register_type, get_registered_types};
-pub use discovery::{discover_routes, RouteFile};
+pub use discovery::{discover_routes, discover_routes_from_fs, RouteFile, DiscoveredRoute};
 pub use typescript::TypeScriptGenerator;
 
 pub struct VirustApp {
