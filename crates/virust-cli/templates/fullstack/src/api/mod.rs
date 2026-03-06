@@ -1,4 +1,2 @@
-pub mod home;
-pub mod blog;
-pub mod dashboard;
-pub mod api;
+// API routes module
+// Routes are auto-discovered from subdirectories via inventory

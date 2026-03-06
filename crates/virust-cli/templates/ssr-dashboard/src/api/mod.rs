@@ -1,2 +1,2 @@
-pub mod stats;
-pub mod users;
+// API routes module
+// Routes are auto-discovered from subdirectories via inventory
