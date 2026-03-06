@@ -1,10 +1,11 @@
-use std::io::BufReader;
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Child, ChildStdin, ChildStdout, Stdio, Command};
 
 use anyhow::Result;
+use serde_json::Value;
 
-use crate::component::ComponentRegistry;
+use crate::component::{ComponentRegistry, RenderedOutput};
 
 pub struct BunRenderer {
     /// Spawned Bun process
@@ -63,6 +64,59 @@ impl BunRenderer {
             .try_wait()
             .map(|status| status.is_none())
             .unwrap_or(false)
+    }
+
+    fn send_request(&mut self, request: &Value) -> Result<()> {
+        let stdin = self.stdin.as_mut().ok_or_else(|| anyhow::anyhow!("stdin not available"))?;
+
+        let request_str = serde_json::to_string(request)?;
+        writeln!(stdin, "{}", request_str)?;
+        stdin.flush()?;
+
+        Ok(())
+    }
+
+    fn receive_response(&mut self) -> Result<Value> {
+        let stdout = self.stdout.as_mut().ok_or_else(|| anyhow::anyhow!("stdout not available"))?;
+
+        let mut line = String::new();
+        stdout.read_line(&mut line)?;
+
+        if line.is_empty() {
+            return Err(anyhow::anyhow!("Empty response from Bun"));
+        }
+
+        let response: Value = serde_json::from_str(&line.trim())?;
+        Ok(response)
+    }
+
+    pub async fn render_component(&mut self, name: &str, props: Value) -> Result<RenderedOutput> {
+        // Find component path
+        let component_path = self.component_registry.get(name)
+            .ok_or_else(|| anyhow::anyhow!("Component not found: {}", name))?;
+
+        let request = serde_json::json!({
+            "type": "render",
+            "component": component_path.to_string_lossy(),
+            "props": props
+        });
+
+        self.send_request(&request)?;
+        let response = self.receive_response()?;
+
+        if let Some(error) = response.get("error") {
+            return Err(anyhow::anyhow!("Component render error: {}", error));
+        }
+
+        let html = response["html"].as_str()
+            .ok_or_else(|| anyhow::anyhow!("Response missing 'html' field"))?
+            .to_string();
+
+        let hydration_data = response["hydrationData"].as_str()
+            .ok_or_else(|| anyhow::anyhow!("Response missing 'hydrationData' field"))?
+            .to_string();
+
+        Ok(RenderedOutput::new(html, hydration_data))
     }
 }
 
