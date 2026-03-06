@@ -14,49 +14,41 @@ lazy_static::lazy_static! {
 
         tokio::spawn(async move {
             eprintln!("SSR: Render task started");
-            let mut renderer_opt: Option<::virust_bun::BunRenderer> = None;
 
             while let Some(req) = rx.recv().await {
                 eprintln!("SSR: Render task received request for component: {}", req.component_name);
 
-                // Ensure renderer is running
-                let needs_restart = if renderer_opt.is_none() {
-                    eprintln!("SSR: No renderer, creating new one");
-                    true
-                } else {
-                    !renderer_opt.as_mut().unwrap().is_alive()
-                };
-
-                if needs_restart {
-                    eprintln!("SSR: Initializing Bun renderer");
-                    match ::virust_bun::BunRenderer::new() {
-                        Ok(r) => {
-                            renderer_opt = Some(r);
-                            eprintln!("SSR: Bun renderer initialized successfully");
-                        }
-                        Err(e) => {
-                            eprintln!("SSR: Failed to initialize Bun: {}", e);
-                            let _ = req.tx.send(Err(anyhow::anyhow!("Failed to initialize Bun: {}", e)));
+                // Create a new Bun renderer for each request
+                // This ensures the component registry is populated
+                eprintln!("SSR: Creating Bun renderer for request");
+                match ::virust_bun::BunRenderer::new() {
+                    Ok(mut renderer) => {
+                        // Set web directory to discover components
+                        use std::path::Path;
+                        let web_dir = Path::new("web");
+                        if let Err(e) = renderer.set_web_dir(web_dir) {
+                            eprintln!("SSR: Failed to set web dir: {}", e);
+                            let _ = req.tx.send(Err(anyhow::anyhow!("Failed to set web dir: {}", e)));
                             continue;
                         }
-                    }
-                }
 
-                if let Some(ref mut renderer) = renderer_opt {
-                    eprintln!("SSR: Calling render_component for '{}'", req.component_name);
-                    match renderer.render_component(&req.component_name, req.props).await {
-                        Ok(output) => {
-                            eprintln!("SSR: Render successful, HTML length: {}", output.html.len());
-                            let _ = req.tx.send(Ok(output));
-                        }
-                        Err(e) => {
-                            eprintln!("SSR: Render failed: {}", e);
-                            let _ = req.tx.send(Err(anyhow::anyhow!("Render failed: {}", e)));
+                        eprintln!("SSR: Renderer has {} components", renderer.component_count());
+
+                        match renderer.render_component(&req.component_name, req.props).await {
+                            Ok(output) => {
+                                eprintln!("SSR: Render successful, HTML length: {}", output.html.len());
+                                let _ = req.tx.send(Ok(output));
+                            }
+                            Err(e) => {
+                                eprintln!("SSR: Render failed: {}", e);
+                                let _ = req.tx.send(Err(anyhow::anyhow!("Render failed: {}", e)));
+                            }
                         }
                     }
-                } else {
-                    eprintln!("SSR: No renderer available");
-                    let _ = req.tx.send(Err(anyhow::anyhow!("Failed to initialize Bun")));
+                    Err(e) => {
+                        eprintln!("SSR: Failed to create Bun renderer: {}", e);
+                        let _ = req.tx.send(Err(anyhow::anyhow!("Failed to initialize Bun: {}", e)));
+                    }
                 }
             }
         });
