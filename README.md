@@ -20,9 +20,29 @@ A **real-time Rust backend framework** optimized for AI-assisted development.
 
 ### Installation
 
+**Option 1: Install script (Recommended)**
+
 ```bash
-cargo install virust
+curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/main/install.sh | bash
 ```
+
+**Option 2: Manual install**
+
+```bash
+# Clone and build
+git clone https://github.com/hangsiahong/virust.git
+cd virust
+cargo build --release
+cp target/release/virust ~/.cargo/bin/virust
+```
+
+**Option 3: Using cargo install**
+
+```bash
+cargo install --git https://github.com/hangsiahong/virust.git --bin virust
+```
+
+See [Installation Docs](./docs/INSTALLATION.md) for more details.
 
 ### Create a Project
 
