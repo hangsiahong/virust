@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use anyhow::Result;
+use serde::{Serialize, Deserialize};
 
 const VALID_EXTENSIONS: &[&str] = &["jsx", "js", "tsx", "ts"];
 
@@ -88,8 +89,32 @@ impl ComponentRegistry {
     }
 }
 
-// Placeholder for Task 3
-pub struct RenderedOutput;
+/// Output from server-side rendering a component
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RenderedOutput {
+    /// Rendered HTML string
+    pub html: String,
+    /// Serialized props for client hydration
+    pub hydration_data: String,
+}
+
+impl RenderedOutput {
+    /// Create a new RenderedOutput with both HTML and hydration data
+    pub fn new(html: String, hydration_data: String) -> Self {
+        Self {
+            html,
+            hydration_data,
+        }
+    }
+
+    /// Create a RenderedOutput with HTML only (empty hydration data)
+    pub fn with_html(html: String) -> Self {
+        Self {
+            html,
+            hydration_data: String::new(),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -236,5 +261,46 @@ mod tests {
         assert!(registry.get("Valid").is_some());
         assert!(registry.get("123Invalid").is_none());
         assert!(registry.get("Invalid-Name").is_none());
+    }
+
+    // RenderedOutput tests
+    #[test]
+    fn test_new_rendered_output() {
+        let html = "<div>Hello World</div>".to_string();
+        let hydration_data = r#"{"props":{"name":"World"}}"#.to_string();
+
+        let output = RenderedOutput::new(html.clone(), hydration_data.clone());
+
+        assert_eq!(output.html, html);
+        assert_eq!(output.hydration_data, hydration_data);
+    }
+
+    #[test]
+    fn test_with_html() {
+        let html = "<div>Static Content</div>".to_string();
+
+        let output = RenderedOutput::with_html(html.clone());
+
+        assert_eq!(output.html, html);
+        assert_eq!(output.hydration_data, "");
+    }
+
+    #[test]
+    fn test_serialize() {
+        let html = "<div>Hello</div>".to_string();
+        let hydration_data = r#"{"props":{}}"#.to_string();
+
+        let output = RenderedOutput::new(html.clone(), hydration_data.clone());
+
+        // Test serialization to JSON
+        let json = serde_json::to_string(&output).unwrap();
+        // JSON serialization will escape the inner quotes in hydration_data
+        let expected = r#"{"html":"<div>Hello</div>","hydration_data":"{\"props\":{}}"}"#;
+        assert_eq!(json, expected);
+
+        // Test deserialization
+        let deserialized: RenderedOutput = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.html, html);
+        assert_eq!(deserialized.hydration_data, hydration_data);
     }
 }
