@@ -9,6 +9,8 @@ pub mod persistence;
 pub mod struct_parser;
 pub mod inventory_registry;
 pub mod hmr;
+pub mod render;
+pub use render::RenderedHtml;
 
 use axum::{Router, routing::get};
 use tower_http::services::ServeDir;
