@@ -1,6 +1,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, ItemFn, ReturnType, Type};
+use syn::{parse_macro_input, ItemFn, ReturnType, Type, FnArg, Pat, Ident};
+use syn::punctuated::Punctuated;
+use syn::token::Comma;
 
 /// HTTP method enum for route detection (internal use only)
 #[derive(Debug, Clone, Copy)]
@@ -45,6 +47,79 @@ fn extract_function_types(input: &ItemFn) -> (String, String) {
     (input_type, output_type)
 }
 
+/// Route argument with metadata
+#[derive(Debug)]
+enum RouteArg {
+    Path(PathArg),
+    Body(BodyArg),
+}
+
+/// Path parameter argument
+#[derive(Debug)]
+struct PathArg {
+    name: Ident,
+    typ: Type,
+}
+
+/// Body parameter argument
+#[derive(Debug)]
+struct BodyArg {
+    name: Ident,
+    typ: Type,
+}
+
+/// Parse route arguments from function parameters, extracting #[path] and #[body] attributes
+fn parse_route_args(args: &Punctuated<FnArg, Comma>) -> Vec<RouteArg> {
+    args.iter()
+        .filter_map(|arg| {
+            if let FnArg::Typed(pat) = arg {
+                // Check for #[path] attribute
+                let is_path = pat.attrs.iter().any(|attr| {
+                    attr.path().is_ident("path")
+                });
+
+                // Check for #[body] attribute
+                let is_body = pat.attrs.iter().any(|attr| {
+                    attr.path().is_ident("body")
+                });
+
+                if let Pat::Ident(ident) = &*pat.pat {
+                    if is_path {
+                        Some(RouteArg::Path(PathArg {
+                            name: ident.ident.clone(),
+                            typ: (*pat.ty).clone(),
+                        }))
+                    } else if is_body {
+                        Some(RouteArg::Body(BodyArg {
+                            name: ident.ident.clone(),
+                            typ: (*pat.ty).clone(),
+                        }))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Strip #[path] and #[body] attributes from function parameters
+fn strip_arg_attributes(mut input: ItemFn) -> ItemFn {
+    for arg in input.sig.inputs.iter_mut() {
+        if let FnArg::Typed(pat) = arg {
+            pat.attrs.retain(|attr| {
+                // Remove #[path] and #[body] attributes
+                !attr.path().is_ident("path") && !attr.path().is_ident("body")
+            });
+        }
+    }
+    input
+}
+
 #[proc_macro_attribute]
 pub fn ws(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
@@ -69,8 +144,14 @@ pub fn ws(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
-    let fn_name = &input.sig.ident;
+    let fn_name = input.sig.ident.clone();
     let _fn_name_str = fn_name.to_string();
+
+    // Parse route arguments to extract #[path] and #[body] metadata
+    let _route_args = parse_route_args(&input.sig.inputs);
+
+    // Strip #[path] and #[body] attributes from function parameters
+    let input = strip_arg_attributes(input);
 
     // Check if function name is an HTTP method
     let http_method = match fn_name.to_string().to_uppercase().as_str() {
@@ -107,8 +188,14 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
-    let fn_name = &input.sig.ident;
+    let fn_name = input.sig.ident.clone();
     let _fn_name_str = fn_name.to_string();
+
+    // Parse route arguments to extract #[path] and #[body] metadata
+    let _route_args = parse_route_args(&input.sig.inputs);
+
+    // Strip #[path] and #[body] attributes from function parameters
+    let input = strip_arg_attributes(input);
 
     // Extract type information
     let (_input_type, _output_type) = extract_function_types(&input);
@@ -128,8 +215,14 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
-    let fn_name = &input.sig.ident;
+    let fn_name = input.sig.ident.clone();
     let _fn_name_str = fn_name.to_string();
+
+    // Parse route arguments to extract #[path] and #[body] metadata
+    let _route_args = parse_route_args(&input.sig.inputs);
+
+    // Strip #[path] and #[body] attributes from function parameters
+    let input = strip_arg_attributes(input);
 
     // Extract type information
     let (_input_type, _output_type) = extract_function_types(&input);
@@ -149,8 +242,14 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
-    let fn_name = &input.sig.ident;
+    let fn_name = input.sig.ident.clone();
     let _fn_name_str = fn_name.to_string();
+
+    // Parse route arguments to extract #[path] and #[body] metadata
+    let _route_args = parse_route_args(&input.sig.inputs);
+
+    // Strip #[path] and #[body] attributes from function parameters
+    let input = strip_arg_attributes(input);
 
     // Extract type information
     let (_input_type, _output_type) = extract_function_types(&input);
