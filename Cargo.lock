@@ -1748,7 +1748,9 @@ dependencies = [
  "axum",
  "clap",
  "notify",
+ "serde_json",
  "tokio",
+ "virust-bun",
  "virust-runtime",
 ]
 
@@ -1792,6 +1794,7 @@ dependencies = [
  "axum",
  "futures-util",
  "inventory",
+ "lazy_static",
  "notify",
  "once_cell",
  "quote",
@@ -1806,6 +1809,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "virust-bun",
  "virust-protocol",
  "walkdir",
 ]
