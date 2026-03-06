@@ -1138,32 +1138,36 @@ fn setup_fullstack_todo_template(project_dir: &Path) -> Result<()> {
 "#;
     fs::write(project_dir.join("src/lib.rs"), lib_rs)?;
 
-    // Create api/mod.rs with route registration for all routes
+    // Create api directory
+    fs::create_dir_all(project_dir.join("src/api"))?;
+
+    // Create api/mod.rs to declare submodules
     let api_mod = r#"pub mod todos;
-pub mod todos_id;
 
-// Register all routes
-pub fn register_routes(router: axum::Router) -> axum::Router {
-    use axum::routing::{get, post, put, delete};
+use axum::Router;
+use virust_runtime::VirustApp;
 
+/// Register all API routes with the router
+pub fn register_routes(router: Router) -> Router {
+    // Routes are auto-registered from todos module via inventory
     router
-        // Todo list page (SSR) - main route
-        .route("/", get(todos::list_todos))
-        // API routes
-        .route("/api/todos", post(todos::create_todo))
-        // Individual todo page (SSR)
-        .route("/todo/:id", get(todos_id::get_todo))
-        .route("/api/todos/:id", put(todos_id::update_todo))
-        .route("/api/todos/:id", delete(todos_id::delete_todo))
 }
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
-    // Create todos/list route (SSR)
-    let todos_list = r#"use virust_macros::{get, post, render_component};
-use virust_macros::body;
+    // Create todos directory first
+    fs::create_dir_all(project_dir.join("src/api/todos"))?;
+
+    // Create todos/mod.rs to declare submodules
+    let todos_mod = r#"pub mod route;
+"#;
+    fs::write(project_dir.join("src/api/todos/mod.rs"), todos_mod)?;
+
+    // Create todos/route.rs
+    let todos_route = r#"use axum::{response::Html, Json};
+use virust_macros::{get, post};
 use virust_runtime::RenderedHtml;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 #[derive(Serialize)]
 pub struct TodoResponse {
@@ -1174,7 +1178,7 @@ pub struct TodoResponse {
     pub created_at: u64,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(Deserialize)]
 pub struct CreateTodoRequest {
     pub title: String,
     pub description: Option<String>,
@@ -1182,15 +1186,27 @@ pub struct CreateTodoRequest {
 
 /// Todo list page with server-side rendering
 #[get]
-#[render_component("TodoList")]
-pub async fn list_todos() -> RenderedHtml {
-    RenderedHtml::new("TodoList")
+pub async fn list_todos() -> Html<String> {
+    let rendered = RenderedHtml::new("TodoList");
+
+    match rendered.render().await {
+        Ok(html) => Html(html),
+        Err(e) => {
+            eprintln!("SSR Error: {}", e);
+            Html(format!(
+                "<!DOCTYPE html>\n<html>\n<head><title>Error</title></head>\n<body>\n    <h1>SSR Error</h1>\n    <p>{}</p>\n</body>\n</html>",
+                e.to_string()
+            ))
+        }
+    }
 }
 
 /// Create new todo endpoint
 #[post]
-pub async fn create_todo(#[body] input: CreateTodoRequest) -> TodoResponse {
-    TodoResponse {
+pub async fn create_todo(
+    Json(input): Json<CreateTodoRequest>,
+) -> Json<TodoResponse> {
+    Json(TodoResponse {
         id: uuid::Uuid::new_v4().to_string(),
         title: input.title,
         description: input.description,
@@ -1199,67 +1215,10 @@ pub async fn create_todo(#[body] input: CreateTodoRequest) -> TodoResponse {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_secs(),
-    }
+    })
 }
 "#;
-
-    // Write todos.rs file
-    fs::write(project_dir.join("src/api/todos.rs"), todos_list)?;
-
-    // Create todos_id route (SSR with path parameter)
-    let todos_id = r#"use virust_macros::{get, put, delete, render_component};
-use virust_macros::path;
-use virust_runtime::RenderedHtml;
-use serde::Serialize;
-
-#[derive(Serialize)]
-pub struct TodoResponse {
-    pub id: String,
-    pub title: String,
-    pub description: Option<String>,
-    pub completed: bool,
-    pub created_at: u64,
-}
-
-/// Individual todo page with server-side rendering
-#[get]
-#[render_component("TodoDetail")]
-pub async fn get_todo(#[path] id: String) -> RenderedHtml {
-    RenderedHtml::with_props("TodoDetail", serde_json::json!({"id": id}))
-}
-
-/// Update todo endpoint
-#[put]
-pub async fn update_todo(
-    #[path] id: String,
-    #[body] update: UpdateTodoRequest,
-) -> TodoResponse {
-    // Update logic would go here
-    TodoResponse {
-        id: id.clone(),
-        title: update.title,
-        description: update.description,
-        completed: update.completed.unwrap_or(false),
-        created_at: 0,
-    }
-}
-
-#[derive(serde::Deserialize)]
-pub struct UpdateTodoRequest {
-    pub title: String,
-    pub description: Option<String>,
-    pub completed: Option<bool>,
-}
-
-/// Delete todo endpoint
-#[delete]
-pub async fn delete_todo(#[path] id: String) -> String {
-    // Delete logic would go here
-    format!("{{\"success\":true, \"id\":\"{}\"}}", id)
-}
-"#;
-    fs::create_dir_all(project_dir.join("src/api/todos_id"))?;
-    fs::write(project_dir.join("src/api/todos_id.rs"), todos_id)?;
+    fs::write(project_dir.join("src/api/todos/route.rs"), todos_route)?;
 
     // Create web/components directory with TypeScript/TSX components
     fs::create_dir_all(project_dir.join("web/components"))?;
