@@ -6,6 +6,20 @@ pub struct HmrWatcher {
     tx: broadcast::Sender<()>,
 }
 
+// Safety: HmrWatcher only contains AtomicBool and broadcast::Sender,
+// which are both Send + Sync
+unsafe impl Send for HmrWatcher {}
+unsafe impl Sync for HmrWatcher {}
+
+impl Clone for HmrWatcher {
+    fn clone(&self) -> Self {
+        Self {
+            running: AtomicBool::new(self.running.load(Ordering::Relaxed)),
+            tx: self.tx.clone(),
+        }
+    }
+}
+
 impl HmrWatcher {
     pub fn new() -> Self {
         let (tx, _) = broadcast::channel(100);

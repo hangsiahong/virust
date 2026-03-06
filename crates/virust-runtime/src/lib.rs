@@ -19,11 +19,33 @@ pub use registry::{RouteRegistry, HttpHandler, WsHandler, TypeDefinition, RouteT
 pub use discovery::{discover_routes, discover_routes_from_fs, RouteFile, DiscoveredRoute};
 pub use typescript::TypeScriptGenerator;
 pub use inventory_registry::{collect_routes};
+pub use hmr::HmrWatcher;
+
+use axum::{
+    extract::{ws::WebSocket, WebSocketUpgrade, State},
+    response::IntoResponse,
+};
+
+async fn hmr_websocket_handler(
+    ws: WebSocketUpgrade,
+    State(hmr): State<HmrWatcher>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| hmr_socket_handler(socket, hmr))
+}
+
+async fn hmr_socket_handler(mut socket: WebSocket, hmr: HmrWatcher) {
+    let mut rx = hmr.subscribe();
+
+    while rx.recv().await.is_ok() {
+        socket.send(axum::extract::ws::Message::Text("reload".into())).await.ok();
+    }
+}
 
 pub struct VirustApp {
     http_router: Router,
     registry: RouteRegistry,
     discovered_routes: Vec<DiscoveredRoute>,
+    hmr: HmrWatcher,
 }
 
 impl VirustApp {
@@ -39,23 +61,21 @@ impl VirustApp {
         Self {
             registry,
             discovered_routes: discovered,
-            http_router: router.route("/ws", get(ws_upgrade)),
+            http_router: router,
+            hmr: HmrWatcher::new(),
         }
     }
 
-    pub fn router(&self) -> Router {
-        let mut router = axum::Router::new();
-
+    pub fn router(&self) -> axum::Router {
         // Serve static files from web/ directory
         let serve_dir = ServeDir::new("web");
-        router = router.nest_service("/", serve_dir);
 
-        // API routes
-        // TODO: Wire up actual handlers from registry
-        // For now, we're just setting up the static file serving
-        // The API routes will be added in a follow-up task
-
-        router
+        // Build router with HMR state
+        axum::Router::new()
+            .nest_service("/", serve_dir)
+            .route("/__hmr", get(hmr_websocket_handler))
+            .route("/ws", get(ws_upgrade))
+            .with_state(self.hmr.clone())
     }
 }
 
