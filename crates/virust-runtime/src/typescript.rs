@@ -1,6 +1,34 @@
 use crate::registry::{TypeDefinition, RouteRegistry};
 use std::collections::HashMap;
 
+/// Map a Rust type to TypeScript type
+pub fn map_rust_type_to_ts(rust_type: &str) -> String {
+    // Remove spaces that syn might add
+    let rust_type = rust_type.replace(" ", "");
+
+    // Handle Option<T>
+    if rust_type.starts_with("Option<") {
+        let inner = &rust_type[7..rust_type.len()-1];
+        return format!("{} | null", map_rust_type_to_ts(inner));
+    }
+
+    // Handle Vec<T>
+    if rust_type.starts_with("Vec<") {
+        let inner = &rust_type[4..rust_type.len()-1];
+        return format!("{}[]", map_rust_type_to_ts(inner));
+    }
+
+    // Primitive types
+    match rust_type.as_str() {
+        "String" | "&str" => "string".to_string(),
+        "i8" | "i16" | "i32" | "i64" | "isize" |
+        "u8" | "u16" | "u32" | "u64" | "usize" |
+        "f32" | "f64" => "number".to_string(),
+        "bool" => "boolean".to_string(),
+        _ => "any".to_string(), // Fallback for complex types
+    }
+}
+
 /// TypeScript code generator
 pub struct TypeScriptGenerator {
     type_definitions: HashMap<String, TypeDefinition>,
@@ -126,5 +154,16 @@ mod tests {
         assert!(output.contains("export async function ping"));
         assert!(!output.contains("export interface any"));
         assert!(!output.contains("export interface void"));
+    }
+
+    #[test]
+    fn test_type_mapping() {
+        use super::map_rust_type_to_ts;
+
+        assert_eq!(map_rust_type_to_ts("String"), "string");
+        assert_eq!(map_rust_type_to_ts("i32"), "number");
+        assert_eq!(map_rust_type_to_ts("bool"), "boolean");
+        assert_eq!(map_rust_type_to_ts("Vec<String>"), "string[]");
+        assert_eq!(map_rust_type_to_ts("Option<i32>"), "number | null");
     }
 }
