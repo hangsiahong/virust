@@ -1112,6 +1112,27 @@ export default function RefreshButton() {
 }
 
 fn setup_fullstack_todo_template(project_dir: &Path) -> Result<()> {
+    // Create .virust directory for SSR infrastructure
+    fs::create_dir_all(project_dir.join(".virust"))?;
+
+    // Include the bundled renderer files
+    fs::write(project_dir.join(".virust/renderer.js"), include_str!("../../virust-bun/bundled/renderer.js"))?;
+    fs::write(project_dir.join(".virust/client.js"), include_str!("../../virust-bun/bundled/client.js"))?;
+    fs::write(project_dir.join(".virust/package.json"), include_str!("../../virust-bun/bundled/package.json"))?;
+
+    // Create package.json in project root for JSX resolution
+    let root_package_json = r#"{
+  "name": "virust-fullstack-todo",
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
+"#;
+    fs::write(project_dir.join("package.json"), root_package_json)?;
+
     // Create lib.rs with multiple API modules
     let lib_rs = r#"pub mod api;
 "#;
@@ -1126,11 +1147,12 @@ pub fn register_routes(router: axum::Router) -> axum::Router {
     use axum::routing::{get, post, put, delete};
 
     router
-        // Todo list routes
-        .route("/api/todos", get(todos::list_todos))
+        // Todo list page (SSR) - main route
+        .route("/", get(todos::list_todos))
+        // API routes
         .route("/api/todos", post(todos::create_todo))
-        // Individual todo routes
-        .route("/api/todos/:id", get(todos_id::get_todo))
+        // Individual todo page (SSR)
+        .route("/todo/:id", get(todos_id::get_todo))
         .route("/api/todos/:id", put(todos_id::update_todo))
         .route("/api/todos/:id", delete(todos_id::delete_todo))
 }
@@ -1517,7 +1539,7 @@ export default function TodoDetail({ id }: TodoDetailProps): JSX.Element {
       <nav className="mb-8">
         <a
           href="/"
-          className="text-purple-600 hover:text-purple-700 no-underline font-medium"
+          className="text-purple-600 hover:text-purple-700 underline font-medium"
         >
           ← Back to Todos
         </a>
@@ -1575,20 +1597,33 @@ export interface Todo {
   created_at: number;
 }
 
-// Mock data (replace with actual API calls in production)
+// Mock data - in production, replace with actual API calls
 export async function loadTodos(): Promise<Todo[]> {
-  // In production, fetch from API
-  const response = await fetch('/api/todos');
-  const todos: Todo[] = await response.json();
-  return todos;
+  // In production, fetch from API: const response = await fetch('/api/todos');
+  // For now, return sample data
+  return [
+    {
+      id: '1',
+      title: 'Learn Virust SSR',
+      description: 'Understand how server-side rendering works with Rust and Bun',
+      completed: true,
+      created_at: Math.floor(Date.now() / 1000) - 86400,
+    },
+    {
+      id: '2',
+      title: 'Build a full-stack app',
+      description: 'Create a todo app with TypeScript and Tailwind CSS',
+      completed: false,
+      created_at: Math.floor(Date.now() / 1000),
+    },
+  ];
 }
 
 export async function loadTodo(id: string): Promise<Todo | null> {
-  // In production, fetch from API
-  const response = await fetch(`/api/todos/${id}`);
-  if (!response.ok) return null;
-  const todo: Todo = await response.json();
-  return todo;
+  // In production, fetch from API: const response = await fetch(`/api/todos/${id}`);
+  // For now, return sample data
+  const todos = await loadTodos();
+  return todos.find(todo => todo.id === id) || null;
 }
 "#;
 
