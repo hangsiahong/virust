@@ -66,6 +66,22 @@ impl BunRenderer {
             .unwrap_or(false)
     }
 
+    /// Send a ping request to verify the Bun process is responsive
+    pub async fn ping(&mut self) -> Result<()> {
+        let request = serde_json::json!({
+            "type": "ping"
+        });
+
+        self.send_request(&request)?;
+        let response = self.receive_response()?;
+
+        if response.get("pong").is_some() {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Invalid ping response"))
+        }
+    }
+
     fn send_request(&mut self, request: &Value) -> Result<()> {
         let stdin = self.stdin.as_mut().ok_or_else(|| anyhow::anyhow!("stdin not available"))?;
 
@@ -128,6 +144,48 @@ impl Drop for BunRenderer {
     }
 }
 
+/// Supervisor for managing the Bun renderer process
+///
+/// The supervisor ensures that a Bun renderer is always available,
+/// automatically restarting it if it crashes.
+pub struct BunSupervisor {
+    renderer: Option<BunRenderer>,
+}
+
+impl BunSupervisor {
+    /// Create a new supervisor with no active renderer
+    pub fn new() -> Self {
+        Self { renderer: None }
+    }
+
+    /// Ensure a Bun renderer is running, creating a new one if needed
+    ///
+    /// This method checks if the current renderer is alive and creates a new one
+    /// if it isn't. This provides automatic restart capability.
+    pub async fn ensure_running(&mut self) -> Result<&mut BunRenderer> {
+        if self.renderer.is_none() {
+            self.renderer = Some(BunRenderer::new()?);
+        } else if !self.renderer.as_mut().unwrap().is_alive() {
+            self.renderer = Some(BunRenderer::new()?);
+        }
+        Ok(self.renderer.as_mut().unwrap())
+    }
+
+    /// Shutdown the supervisor and clean up the renderer
+    pub fn shutdown(mut self) -> Result<()> {
+        if let Some(renderer) = self.renderer.take() {
+            drop(renderer);
+        }
+        Ok(())
+    }
+}
+
+impl Default for BunSupervisor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -160,5 +218,22 @@ mod tests {
         // We'll test component_count through the registry directly
         let registry = ComponentRegistry::new();
         assert_eq!(registry.list().len(), 0);
+    }
+}
+
+#[cfg(test)]
+mod supervisor_tests {
+    use super::*;
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_supervisor_ensures_running() {
+        let mut supervisor = BunSupervisor::new();
+
+        let renderer = supervisor.ensure_running().await.unwrap();
+        assert!(renderer.is_alive());
+
+        let renderer2 = supervisor.ensure_running().await.unwrap();
+        assert!(renderer2.is_alive());
     }
 }

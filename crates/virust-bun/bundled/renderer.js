@@ -80,7 +80,9 @@ rl.on('line', async (line) => {
   try {
     const request = JSON.parse(line);
 
-    if (request.type === 'render') {
+    if (request.type === 'ping') {
+      console.log(JSON.stringify({ pong: true }));
+    } else if (request.type === 'render') {
       const result = await renderer.render(request.component, request.props);
       console.log(JSON.stringify(result));
     }
