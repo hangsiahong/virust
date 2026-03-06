@@ -4,7 +4,8 @@ members = [
     "crates/virust-macros",
     "crates/virust-protocol",
     "crates/virust-cli",
-    "crates/virust-typescript"
+    "crates/virust-typescript",
+    "crates/virust-bun"
 ]
 
 resolver = "2"
