@@ -1,8 +1,26 @@
 # Virust v0.4 vs Next.js Performance Comparison
 
-## Executive Summary
+## ⚠️ IMPORTANT NOTE
+
+**This document contains THEORETICAL projections.**
+
+For **REAL MEASURED BENCHMARK RESULTS**, see: [VIRUST_VS_NEXTJS_REAL_BENCHMARK.md](./VIRUST_VS_NEXTJS_REAL_BENCHMARK.md)
+
+The real benchmarks were run on March 6, 2026 and measured actual performance. This document below represents initial expectations that were later validated through real testing.
+
+---
+
+## Executive Summary (THEORETICAL)
 
 Virust v0.4 demonstrates significant performance advantages over Next.js for server-side rendering workloads, particularly in cold start times, memory efficiency, and raw throughput.
+
+**REAL RESULTS (from actual benchmarks):**
+- **Throughput:** 42.8x higher (112,505 vs 2,629 req/sec)
+- **Cold Start:** 42.3x faster (7ms vs 296ms)
+- **Memory:** 19.7x less (4.7MB vs 92.8MB)
+- **Latency:** 327x better (0.01ms vs 3.27ms avg)
+
+See [VIRUST_VS_NEXTJS_REAL_BENCHMARK.md](./VIRUST_VS_NEXTJS_REAL_BENCHMARK.md) for complete details.
 
 ## Technical Architecture Comparison
 
