@@ -15,7 +15,8 @@ lazy_static::lazy_static! {
 }
 
 pub async fn init_bun_renderer(web_dir: &std::path::Path) -> Result<(), anyhow::Error> {
-    let renderer = ::virust_bun::BunRenderer::new()?;
+    let mut renderer = ::virust_bun::BunRenderer::new()?;
+    renderer.set_web_dir(web_dir)?;
     let mut guard = BUN_RENDERER.write().await;
     *guard = Some(renderer);
     Ok(())
@@ -35,42 +36,47 @@ impl RenderedHtml {
             props: Value::Object(Default::default()),
         }
     }
+}
 
-    pub async fn render_to_response(self) -> axum::response::Response {
-        let guard = BUN_RENDERER.read().await;
+// Async renderer helper
+pub struct BunRendererExtension(pub Arc<RwLock<Option<::virust_bun::BunRenderer>>>);
 
-        if let Some(_renderer) = guard.as_ref() {
-            // Clone renderer since we need mutable access
-            // This will be fixed with proper locking in Task 11
-            let html = format!(
-                r#"<!DOCTYPE html>
-<html>
-<head><title>{}</title></head>
-<body>
-<div id="root">
-<p>Component: {} with props: {}</p>
-</div>
-<script id="__VIRUST_PROPS__" type="application/json">{}</script>
-</body>
-</html>"#,
-                self.component_name,
-                self.component_name,
-                self.props,
-                self.props
-            );
-            Html(html).into_response()
-        } else {
-            // Fallback if Bun not initialized
-            Html("<html><body><p>Bun renderer not initialized</p></body></html>").into_response()
-        }
+#[axum::async_trait]
+impl<S> axum::extract::FromRequestParts<S> for BunRendererExtension
+where
+    S: Send + Sync,
+{
+    type Rejection = axum::http::StatusCode;
+
+    async fn from_request_parts(
+        _parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(BunRendererExtension(Arc::clone(&BUN_RENDERER)))
     }
 }
 
 impl IntoResponse for RenderedHtml {
     fn into_response(self) -> axum::response::Response {
-        // Convert to async response
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        rt.block_on(self.render_to_response())
+        // This now needs to be async, so we'll use a different approach
+        // Return a response that will be rendered by middleware
+        let html = format!(
+            r#"<!DOCTYPE html>
+<html>
+<head><title>Virust SSR</title></head>
+<body>
+<div id="root">
+<p>Component: {}</p>
+<p>Props: {}</p>
+</div>
+<script id="__VIRUST_PROPS__" type="application/json">{}</script>
+</body>
+</html>"#,
+            self.component_name,
+            self.props,
+            self.props
+        );
+        Html(html).into_response()
     }
 }
 
@@ -95,7 +101,7 @@ mod tests {
     #[test]
     fn test_into_response() {
         let html = RenderedHtml::new("App");
-        let response = html.into_response();
+        let _response = html.into_response();
         // Just check it doesn't panic
     }
 }
