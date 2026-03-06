@@ -9,14 +9,14 @@ Install Virust CLI from GitHub without needing crates.io publishing.
 ### Using the install script (Linux/macOS):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/master/install.sh | bash
 ```
 
 Or download and run:
 
 ```bash
 # Download the script
-curl -O https://raw.githubusercontent.com/hangsiahong/virust/main/install.sh
+curl -O https://raw.githubusercontent.com/hangsiahong/virust/master/install.sh
 
 # Review it if you want
 cat install.sh
@@ -109,7 +109,7 @@ Most Linux distributions are supported:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Then install Virust
-curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/master/install.sh | bash
 ```
 
 ### macOS
@@ -121,7 +121,7 @@ Works on both Intel (x86_64) and Apple Silicon (arm64/aarch64):
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # Then install Virust
-curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/master/install.sh | bash
 ```
 
 ### Windows (WSL2)
@@ -134,7 +134,7 @@ wsl --install
 
 # Then in WSL2, install Rust and Virust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/master/install.sh | bash
 ```
 
 ---
@@ -159,7 +159,7 @@ To update to the latest version:
 
 ```bash
 # Re-run the install script
-curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/master/install.sh | bash
 
 # Or pull and rebuild manually
 cd virust  # or wherever you cloned it

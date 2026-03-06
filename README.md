@@ -23,7 +23,7 @@ A **real-time Rust backend framework** optimized for AI-assisted development.
 **Option 1: Install script (Recommended)**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/hangsiahong/virust/master/install.sh | bash
 ```
 
 **Option 2: Manual install**
