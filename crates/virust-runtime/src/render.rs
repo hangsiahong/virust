@@ -319,6 +319,10 @@ impl IntoResponse for RenderedHtml {
         let component_name = self.component_name.clone();
         let props = self.props.clone();
         let rt = tokio::runtime::Runtime::new().unwrap();
+        // GEMINI said no block_on because it not make rust shine? 
+        // should make your handler async and call render().await
+        // directly there. This keeps the whole pipeline non-blocking
+        // and lets Rust's performance truly shine.
         match rt.block_on(self.render()) {
             Ok(html) => Html(html).into_response(),
             Err(e) => {
