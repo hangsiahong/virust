@@ -9,7 +9,8 @@ pub mod persistence;
 pub mod struct_parser;
 pub mod inventory_registry;
 
-use axum::{Router, routing::{get, post, put, delete}};
+use axum::{Router, routing::get};
+use tower_http::services::ServeDir;
 use http::create_http_router;
 use websocket::ws_upgrade;
 pub use watcher::create_watcher;
@@ -44,22 +45,14 @@ impl VirustApp {
     pub fn router(&self) -> Router {
         let mut router = axum::Router::new();
 
-        // Register routes from inventory
-        for route in self.registry.get_routes() {
-            // Create a simple Axum-compatible handler
-            // TODO: This should eventually call the actual handler function
-            let handler = async move || -> &'static str {
-                "OK"
-            };
+        // Serve static files from web/ directory
+        let serve_dir = ServeDir::new("web");
+        router = router.nest_service("/", serve_dir);
 
-            router = match route.method.as_str() {
-                "GET" => router.route(&route.path, get(handler)),
-                "POST" => router.route(&route.path, post(handler)),
-                "PUT" => router.route(&route.path, put(handler)),
-                "DELETE" => router.route(&route.path, delete(handler)),
-                _ => router,
-            };
-        }
+        // API routes
+        // TODO: Wire up actual handlers from registry
+        // For now, we're just setting up the static file serving
+        // The API routes will be added in a follow-up task
 
         router
     }
