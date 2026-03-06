@@ -67,15 +67,27 @@ impl VirustApp {
     }
 
     pub fn router(&self) -> axum::Router {
+        use axum::routing::{get, post, put, delete};
+
         // Serve static files from web/ directory
         let serve_dir = ServeDir::new("web");
 
-        // Build router with HMR state
-        axum::Router::new()
+        // Start with base router
+        let router = axum::Router::new()
             .nest_service("/", serve_dir)
             .route("/__hmr", get(hmr_websocket_handler))
             .route("/ws", get(ws_upgrade))
-            .with_state(self.hmr.clone())
+            .with_state(self.hmr.clone());
+
+        // Try to call the user's register_routes function if it exists
+        // This function is defined in the user's api/mod.rs
+        // We need to call it to register the user's route handlers
+
+        // Note: This requires the user's project to have the api module with register_routes
+        // For now, we'll just return the base router
+        // The user's main.rs should call api::register_routes() to add their routes
+
+        router
     }
 }
 

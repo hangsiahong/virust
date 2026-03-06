@@ -70,11 +70,12 @@ uuid = {{ version = "1.0", features = ["v4"] }}
     }
 
     // Create main.rs as entry point
-    let main_rs = r#"use virust_runtime::VirustApp;
+    let main_rs = format!(
+        r#"use virust_runtime::VirustApp;
 use std::env;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> anyhow::Result<()> {{
     let args: Vec<String> = env::args().collect();
     let port = args.iter()
         .position(|x| x == "--port")
@@ -85,14 +86,19 @@ async fn main() -> anyhow::Result<()> {
     let app = VirustApp::new();
     let router = app.router();
 
-    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
-    println!("🚀 Server running on http://127.0.0.1:{}", port);
+    // Register user routes from the api module
+    let router = {project_name}::api::register_routes(router);
+
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{{}}", port)).await?;
+    println!("🚀 Server running on http://127.0.0.1:{{}}", port);
 
     axum::serve(listener, router).await?;
 
     Ok(())
-}
-"#;
+}}
+"#,
+        project_name = name.replace("-", "_")
+    );
     fs::write(project_dir.join("src/main.rs"), main_rs)?;
 
     // No longer need vite.config.ts - using pure static file serving
@@ -127,11 +133,21 @@ pub use api::chat;
 
     // Create api/mod.rs to export route modules
     let api_mod = r#"pub mod chat;
+
+// This function is called by the runtime to register routes
+pub fn register_routes(router: axum::Router) -> axum::Router {
+    use axum::routing::get;
+
+    // Register chat WebSocket route
+    router
+        .route("/api/chat", get(chat::chat_wrapper))
+}
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
     // Create example route
     let route_rs = r#"use virust_macros::ws;
+use virust_macros::body;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
@@ -145,7 +161,7 @@ pub struct ChatResponse {
 }
 
 #[ws]
-async fn chat(msg: ChatMessage) -> ChatResponse {
+async fn chat(#[body] msg: ChatMessage) -> ChatResponse {
     println!("Received: {}", msg.message);
     ChatResponse { ok: true }
 }
@@ -197,6 +213,16 @@ fn setup_chat_template(project_dir: &Path) -> Result<()> {
 
     // Create api/mod.rs
     let api_mod = r#"pub mod route;
+
+// This function is called by the runtime to register routes
+pub fn register_routes(router: axum::Router) -> axum::Router {
+    use axum::routing::{get};
+
+    // Register chat WebSocket route and history endpoint
+    router
+        .route("/api/chat", get(route::route_wrapper))
+        .route("/api/chat/history", get(route::history))
+}
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
@@ -279,6 +305,23 @@ fn setup_todo_template(project_dir: &Path) -> Result<()> {
 
     // Create api/mod.rs
     let api_mod = r#"pub mod todos;
+pub mod todos_id;
+
+// This function is called by the runtime to register routes
+pub fn register_routes(router: axum::Router) -> axum::Router {
+    use axum::routing::{get, post, put, delete};
+
+    // Register todos routes
+    // Note: list_todos has no parameters, so it's called directly
+    // Other handlers have path/body parameters, so they use _wrapper suffix
+    router
+        .route("/api/todos", get(todos::list_todos))
+        .route("/api/todos", post(todos::create_todo_wrapper))
+        // Register todos_id routes (all have path parameters, so use _wrapper)
+        .route("/api/todos/:id", get(todos_id::get_todo_wrapper))
+        .route("/api/todos/:id", put(todos_id::update_todo_wrapper))
+        .route("/api/todos/:id", delete(todos_id::delete_todo_wrapper))
+}
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
