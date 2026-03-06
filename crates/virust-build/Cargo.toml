@@ -1,0 +1,21 @@
+[package]
+name = "virust-build"
+version = "0.5.0"
+edition = "2021"
+
+# Note: This crate is version 0.5.0 as it's the leading edge crate for Virust v0.5 features.
+# Other crates in the workspace remain at 0.1.0 and will be bumped together for the v0.5 release.
+
+[dependencies]
+virust-bun = { path = "../virust-bun" }
+virust-macros = { path = "../virust-macros" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1.0"
+thiserror = "1.0"
+walkdir = "2.4"
+syn = { version = "2.0", features = ["full", "extra-traits"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+num_cpus = "1.16"
