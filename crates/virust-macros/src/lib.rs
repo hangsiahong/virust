@@ -1,3 +1,5 @@
+mod cache;
+
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, ItemFn, ReturnType, Type, FnArg, Pat, Ident};
@@ -1145,4 +1147,34 @@ pub fn ssg(attrs: TokenStream, input: TokenStream) -> TokenStream {
     };
 
     TokenStream::from(expanded)
+}
+
+/// Marks a route handler for cache configuration
+///
+/// # Examples
+///
+/// Cache response for 60 seconds:
+/// ```rust
+/// use virust_macros::cache;
+///
+/// #[cache(max_age = 60)]
+/// pub async fn get_data() -> String {
+///     "data".to_string()
+/// }
+/// ```
+///
+/// Cache for 5 minutes (300 seconds):
+/// ```rust
+/// #[cache(max_age = 300)]
+/// pub async fn get_user() -> String {
+///     "user".to_string()
+/// }
+/// ```
+///
+/// # Parameters
+///
+/// * `max_age` - Time in seconds to cache the response. Required parameter.
+#[proc_macro_attribute]
+pub fn cache(attrs: TokenStream, input: TokenStream) -> TokenStream {
+    cache::cache(attrs, input)
 }

@@ -15,7 +15,19 @@ pub struct SsgRoute {
     pub revalidate: Option<u64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CacheRoute {
+    pub path: String,
+    pub handler: String,
+    pub max_age: u64,
+}
+
 pub trait SsgRouteMetadata {
     const REVALIDATE: Option<u64>;
+    fn route_path() -> &'static str;
+}
+
+pub trait CacheRouteMetadata {
+    const MAX_AGE: u64;
     fn route_path() -> &'static str;
 }
