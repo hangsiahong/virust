@@ -35,3 +35,8 @@ impl SsgBuilder {
         }
     }
 }
+
+pub trait SsgRouteMetadata {
+    const REVALIDATE: Option<u64>;
+    fn route_path() -> &'static str;
+}

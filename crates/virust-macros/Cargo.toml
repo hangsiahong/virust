@@ -22,5 +22,6 @@ tokio = { version = "1", features = ["full"] }
 axum = "0.7"
 virust-runtime = { path = "../virust-runtime" }
 virust-bun = { path = "../virust-bun" }
+virust-build = { path = "../virust-build" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

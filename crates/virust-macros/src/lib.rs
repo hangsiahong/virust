@@ -1059,3 +1059,64 @@ pub fn render_component(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
+
+#[proc_macro_attribute]
+pub fn ssg(attrs: TokenStream, input: TokenStream) -> TokenStream {
+    // Use a simple parser for the attributes
+    let attr_str = attrs.to_string();
+    let input_fn = parse_macro_input!(input as ItemFn);
+
+    // Parse revalidate argument from attribute string
+    // Handle formats: "revalidate = 60" or just empty
+    let revalidate_expr = if attr_str.contains("revalidate") {
+        // Extract the number after "revalidate"
+        let parts: Vec<&str> = attr_str.split('=').collect();
+        if parts.len() >= 2 {
+            let value_str = parts[1].trim().trim_end_matches(',').trim();
+            if let Ok(value) = value_str.parse::<u64>() {
+                quote! { Some(#value) }
+            } else {
+                quote! { None }
+            }
+        } else {
+            quote! { None }
+        }
+    } else {
+        quote! { None }
+    };
+
+    // Keep original function unchanged
+    let fn_name = &input_fn.sig.ident;
+    let fn_attrs = &input_fn.attrs;
+    let fn_vis = &input_fn.vis;
+    let fn_sig = &input_fn.sig;
+    let fn_body = &input_fn.block;
+
+    // Create a wrapper struct name with proper camelCase
+    let fn_name_str = fn_name.to_string();
+    let struct_name = Ident::new(
+        &format!("{}SsgMeta", fn_name_str),
+        fn_name.span()
+    );
+
+    // Output: keep function + add compile-time registration via wrapper struct
+    let expanded = quote! {
+        #(#fn_attrs)*
+        #fn_vis #fn_sig #fn_body
+
+        // Register route metadata at compile time
+        #[automatically_derived]
+        pub struct #struct_name;
+
+        #[automatically_derived]
+        impl virust_build::SsgRouteMetadata for #struct_name {
+            const REVALIDATE: Option<u64> = #revalidate_expr;
+
+            fn route_path() -> &'static str {
+                stringify!(#fn_name)
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
