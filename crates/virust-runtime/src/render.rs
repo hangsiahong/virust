@@ -13,32 +13,49 @@ lazy_static::lazy_static! {
         let (tx, mut rx) = mpsc::channel::<RenderRequest>(100);
 
         tokio::spawn(async move {
+            eprintln!("SSR: Render task started");
             let mut renderer_opt: Option<::virust_bun::BunRenderer> = None;
 
             while let Some(req) = rx.recv().await {
+                eprintln!("SSR: Render task received request for component: {}", req.component_name);
+
                 // Ensure renderer is running
                 let needs_restart = if renderer_opt.is_none() {
+                    eprintln!("SSR: No renderer, creating new one");
                     true
                 } else {
                     !renderer_opt.as_mut().unwrap().is_alive()
                 };
 
                 if needs_restart {
-                    if let Ok(r) = ::virust_bun::BunRenderer::new() {
-                        renderer_opt = Some(r);
+                    eprintln!("SSR: Initializing Bun renderer");
+                    match ::virust_bun::BunRenderer::new() {
+                        Ok(r) => {
+                            renderer_opt = Some(r);
+                            eprintln!("SSR: Bun renderer initialized successfully");
+                        }
+                        Err(e) => {
+                            eprintln!("SSR: Failed to initialize Bun: {}", e);
+                            let _ = req.tx.send(Err(anyhow::anyhow!("Failed to initialize Bun: {}", e)));
+                            continue;
+                        }
                     }
                 }
 
                 if let Some(ref mut renderer) = renderer_opt {
+                    eprintln!("SSR: Calling render_component for '{}'", req.component_name);
                     match renderer.render_component(&req.component_name, req.props).await {
                         Ok(output) => {
+                            eprintln!("SSR: Render successful, HTML length: {}", output.html.len());
                             let _ = req.tx.send(Ok(output));
                         }
                         Err(e) => {
+                            eprintln!("SSR: Render failed: {}", e);
                             let _ = req.tx.send(Err(anyhow::anyhow!("Render failed: {}", e)));
                         }
                     }
                 } else {
+                    eprintln!("SSR: No renderer available");
                     let _ = req.tx.send(Err(anyhow::anyhow!("Failed to initialize Bun")));
                 }
             }
@@ -245,6 +262,8 @@ impl RenderedHtml {
     }
 
     pub async fn render(self) -> Result<String, anyhow::Error> {
+        eprintln!("SSR: Rendering component '{}'", self.component_name);
+
         let (tx, mut rx) = mpsc::channel(1);
 
         RENDER_TX.send(RenderRequest {
@@ -252,8 +271,10 @@ impl RenderedHtml {
             props: self.props.clone(),
             tx,
         }).await?;
+        eprintln!("SSR: Request sent to render task");
 
-        let output = rx.recv().await.ok_or_else(|| anyhow::anyhow!("No response"))??;
+        let output = rx.recv().await.ok_or_else(|| anyhow::anyhow!("No response from render task"))??;
+        eprintln!("SSR: Got response, HTML length: {}", output.html.len());
 
         Ok(self.wrap_html(output.html, output.hydration_data))
     }

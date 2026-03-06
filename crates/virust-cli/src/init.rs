@@ -605,7 +605,7 @@ pub async fn home() -> Html<String> {
 
     // Create HomePage.jsx component
     let home_page_jsx = r#"// HomePage.jsx - Server-side rendered blog home page
-export default async function HomePage() {
+export default function HomePage() {
   // This component is rendered on the server
   // In a real blog, you might fetch posts here
 
@@ -823,7 +823,7 @@ pub async fn dashboard() -> Html<String> {
     let dashboard_jsx = r#"// Dashboard.jsx - Server-side rendered dashboard with data
 import RefreshButton from './RefreshButton';
 
-export default async function Dashboard({ title, stats }) {
+export default function Dashboard({ title, stats }) {
   // This component is rendered on the server
   // Data is passed from the backend as props
 
@@ -1211,7 +1211,7 @@ interface Todo {
   created_at: number;
 }
 
-export default async function TodoList(): Promise<JSX.Element> {
+export default function TodoList(): JSX.Element {
   // This is rendered on the server with data
   const todos: Todo[] = await loadTodos();
 
@@ -1455,7 +1455,7 @@ interface TodoDetailProps {
   id: string;
 }
 
-export default async function TodoDetail({ id }: TodoDetailProps): Promise<JSX.Element> {
+export default function TodoDetail({ id }: TodoDetailProps): JSX.Element {
   // Fetch todo data on server
   const todo: Todo | null = await loadTodo(id);
 
