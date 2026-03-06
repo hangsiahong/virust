@@ -341,12 +341,7 @@ async fn list_todos() -> String {
 
 /// Create a new todo
 #[post]
-async fn create_todo(payload: String) -> String {
-    let input: CreateTodoRequest = match serde_json::from_str(&payload) {
-        Ok(req) => req,
-        Err(_) => return serde_json::json!({"error": "Invalid JSON"}).to_string(),
-    };
-
+async fn create_todo(#[body] input: CreateTodoRequest) -> String {
     let todo = serde_json::json!({
         "title": input.title,
         "description": input.description,
@@ -404,7 +399,7 @@ lazy_static::lazy_static! {
 
 /// Get a specific todo by ID
 #[get]
-async fn get_todo(id: String) -> String {
+async fn get_todo(#[path] id: String) -> String {
     match PERSISTENCE.get::<Value>("todos", &id).await {
         Ok(Some(todo)) => serde_json::to_string(&todo).unwrap_or_else(|_| "{}".to_string()),
         Ok(None) => serde_json::json!({"error": "Todo not found"}).to_string(),
@@ -414,12 +409,7 @@ async fn get_todo(id: String) -> String {
 
 /// Update a todo by ID
 #[put]
-async fn update_todo(id: String, payload: String) -> String {
-    let input: UpdateTodoRequest = match serde_json::from_str(&payload) {
-        Ok(req) => req,
-        Err(_) => return serde_json::json!({"error": "Invalid JSON"}).to_string(),
-    };
-
+async fn update_todo(#[path] id: String, #[body] input: UpdateTodoRequest) -> String {
     // First get the existing todo
     let existing = match PERSISTENCE.get::<Value>("todos", &id).await {
         Ok(Some(todo)) => todo,
@@ -451,7 +441,7 @@ async fn update_todo(id: String, payload: String) -> String {
 
 /// Delete a todo by ID
 #[delete]
-async fn delete_todo(id: String) -> String {
+async fn delete_todo(#[path] id: String) -> String {
     match PERSISTENCE.delete("todos", &id).await {
         Ok(_) => serde_json::json!({"success": true}).to_string(),
         Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
