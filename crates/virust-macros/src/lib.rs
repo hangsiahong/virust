@@ -167,6 +167,14 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Validate: only one body parameter allowed
+    if body_params.len() > 1 {
+        panic!(
+            "Only one #[body] parameter is allowed per function, found {}",
+            body_params.len()
+        );
+    }
+
     // Strip #[path] and #[body] attributes from function parameters
     let original_fn = strip_arg_attributes(input.clone());
 
@@ -223,14 +231,19 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
             // Both path and body parameters
             let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
-            let body_names: Vec<_> = body_params.iter().map(|b| &b.name).collect();
+            let body_param = &body_params[0];
+            let body_name = &body_param.name;
+            let all_param_names: Vec<_> = path_params.iter()
+                .map(|p| &p.name)
+                .chain(body_params.iter().map(|b| &b.name))
+                .collect();
             let code = quote! {
                 let path = axum::extract::Path((#(#path_names),*));
                 let (#(#path_names),*) = path.0;
-                let json = axum::Json((#(#body_names),*));
-                let (#(#body_names),*) = json.0;
+                let json = axum::Json(#body_name);
+                let #body_name = json.0;
             };
-            (code, param_names)
+            (code, all_param_names)
         } else if !path_params.is_empty() {
             // Only path parameters
             let code = quote! {
@@ -239,12 +252,14 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
             };
             (code, param_names)
         } else {
-            // Only body parameters
+            // Only body parameters (single body param guaranteed by validation)
+            let body_param = &body_params[0];
+            let body_name = &body_param.name;
             let code = quote! {
-                let json = axum::Json((#(#param_names),*));
-                let (#(#param_names),*) = json.0;
+                let json = axum::Json(#body_name);
+                let #body_name = json.0;
             };
-            (code, param_names)
+            (code, vec![body_name])
         };
 
         quote! {
@@ -304,6 +319,14 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Validate: only one body parameter allowed
+    if body_params.len() > 1 {
+        panic!(
+            "Only one #[body] parameter is allowed per function, found {}",
+            body_params.len()
+        );
+    }
+
     // Strip #[path] and #[body] attributes from function parameters
     let original_fn = strip_arg_attributes(input.clone());
 
@@ -343,14 +366,19 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
             // Both path and body parameters
             let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
-            let body_names: Vec<_> = body_params.iter().map(|b| &b.name).collect();
+            let body_param = &body_params[0];
+            let body_name = &body_param.name;
+            let all_param_names: Vec<_> = path_params.iter()
+                .map(|p| &p.name)
+                .chain(body_params.iter().map(|b| &b.name))
+                .collect();
             let code = quote! {
                 let path = axum::extract::Path((#(#path_names),*));
                 let (#(#path_names),*) = path.0;
-                let json = axum::Json((#(#body_names),*));
-                let (#(#body_names),*) = json.0;
+                let json = axum::Json(#body_name);
+                let #body_name = json.0;
             };
-            (code, param_names)
+            (code, all_param_names)
         } else if !path_params.is_empty() {
             // Only path parameters
             let code = quote! {
@@ -359,12 +387,14 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
             };
             (code, param_names)
         } else {
-            // Only body parameters
+            // Only body parameters (single body param guaranteed by validation)
+            let body_param = &body_params[0];
+            let body_name = &body_param.name;
             let code = quote! {
-                let json = axum::Json((#(#param_names),*));
-                let (#(#param_names),*) = json.0;
+                let json = axum::Json(#body_name);
+                let #body_name = json.0;
             };
-            (code, param_names)
+            (code, vec![body_name])
         };
 
         quote! {
@@ -424,6 +454,14 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Validate: only one body parameter allowed
+    if body_params.len() > 1 {
+        panic!(
+            "Only one #[body] parameter is allowed per function, found {}",
+            body_params.len()
+        );
+    }
+
     // Strip #[path] and #[body] attributes from function parameters
     let original_fn = strip_arg_attributes(input.clone());
 
@@ -463,14 +501,19 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
             // Both path and body parameters
             let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
-            let body_names: Vec<_> = body_params.iter().map(|b| &b.name).collect();
+            let body_param = &body_params[0];
+            let body_name = &body_param.name;
+            let all_param_names: Vec<_> = path_params.iter()
+                .map(|p| &p.name)
+                .chain(body_params.iter().map(|b| &b.name))
+                .collect();
             let code = quote! {
                 let path = axum::extract::Path((#(#path_names),*));
                 let (#(#path_names),*) = path.0;
-                let json = axum::Json((#(#body_names),*));
-                let (#(#body_names),*) = json.0;
+                let json = axum::Json(#body_name);
+                let #body_name = json.0;
             };
-            (code, param_names)
+            (code, all_param_names)
         } else if !path_params.is_empty() {
             // Only path parameters
             let code = quote! {
@@ -479,12 +522,14 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
             };
             (code, param_names)
         } else {
-            // Only body parameters
+            // Only body parameters (single body param guaranteed by validation)
+            let body_param = &body_params[0];
+            let body_name = &body_param.name;
             let code = quote! {
-                let json = axum::Json((#(#param_names),*));
-                let (#(#param_names),*) = json.0;
+                let json = axum::Json(#body_name);
+                let #body_name = json.0;
             };
-            (code, param_names)
+            (code, vec![body_name])
         };
 
         quote! {
@@ -544,6 +589,14 @@ pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
+    // Validate: only one body parameter allowed
+    if body_params.len() > 1 {
+        panic!(
+            "Only one #[body] parameter is allowed per function, found {}",
+            body_params.len()
+        );
+    }
+
     // Strip #[path] and #[body] attributes from function parameters
     let original_fn = strip_arg_attributes(input.clone());
 
@@ -583,14 +636,19 @@ pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
             // Both path and body parameters
             let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
-            let body_names: Vec<_> = body_params.iter().map(|b| &b.name).collect();
+            let body_param = &body_params[0];
+            let body_name = &body_param.name;
+            let all_param_names: Vec<_> = path_params.iter()
+                .map(|p| &p.name)
+                .chain(body_params.iter().map(|b| &b.name))
+                .collect();
             let code = quote! {
                 let path = axum::extract::Path((#(#path_names),*));
                 let (#(#path_names),*) = path.0;
-                let json = axum::Json((#(#body_names),*));
-                let (#(#body_names),*) = json.0;
+                let json = axum::Json(#body_name);
+                let #body_name = json.0;
             };
-            (code, param_names)
+            (code, all_param_names)
         } else if !path_params.is_empty() {
             // Only path parameters
             let code = quote! {
@@ -599,12 +657,14 @@ pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
             };
             (code, param_names)
         } else {
-            // Only body parameters
+            // Only body parameters (single body param guaranteed by validation)
+            let body_param = &body_params[0];
+            let body_name = &body_param.name;
             let code = quote! {
-                let json = axum::Json((#(#param_names),*));
-                let (#(#param_names),*) = json.0;
+                let json = axum::Json(#body_name);
+                let #body_name = json.0;
             };
-            (code, param_names)
+            (code, vec![body_name])
         };
 
         quote! {
