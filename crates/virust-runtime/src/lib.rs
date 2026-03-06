@@ -10,7 +10,9 @@ pub mod struct_parser;
 pub mod inventory_registry;
 pub mod hmr;
 pub mod render;
+pub mod middleware;
 pub use render::RenderedHtml;
+pub use middleware::ssr_middleware;
 
 use axum::{Router, routing::get};
 use tower_http::services::ServeDir;

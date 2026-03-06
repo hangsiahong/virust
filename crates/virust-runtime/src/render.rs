@@ -36,6 +36,21 @@ impl RenderedHtml {
             props: Value::Object(Default::default()),
         }
     }
+
+    pub async fn render(self) -> Result<String, anyhow::Error> {
+        let guard = BUN_RENDERER.read().await;
+
+        if let Some(_renderer) = guard.as_ref() {
+            // We need mutable access, so we'll use a different approach
+            // For now, return placeholder
+            Ok(format!(
+                "<div>Component: {} (SSR not yet implemented)</div>",
+                self.component_name
+            ))
+        } else {
+            Ok("<div>Bun renderer not initialized</div>".to_string())
+        }
+    }
 }
 
 // Async renderer helper
@@ -103,5 +118,18 @@ mod tests {
         let html = RenderedHtml::new("App");
         let _response = html.into_response();
         // Just check it doesn't panic
+    }
+}
+
+#[cfg(test)]
+mod render_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_render_without_bun() {
+        let html = RenderedHtml::new("Test");
+        let result = html.render().await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().contains("Bun renderer not initialized"));
     }
 }
