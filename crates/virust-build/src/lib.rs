@@ -36,7 +36,14 @@ impl SsgBuilder {
     }
 }
 
+/// Metadata trait for SSG routes
+///
+/// This trait is automatically implemented by the #[ssg] macro for each
+/// marked function. It provides compile-time metadata about SSG routes.
 pub trait SsgRouteMetadata {
+    /// ISR revalidation interval in seconds, if any
     const REVALIDATE: Option<u64>;
+
+    /// The function name (route identifier)
     fn route_path() -> &'static str;
 }

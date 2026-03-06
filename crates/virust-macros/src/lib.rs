@@ -1060,6 +1060,32 @@ pub fn render_component(attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
+/// Marks a route handler for static site generation (SSG)
+///
+/// # Examples
+///
+/// Generate static HTML at build time:
+/// ```rust
+/// use virust_macros::ssg;
+///
+/// #[ssg]
+/// pub async fn about_page() -> String {
+///     "About".to_string()
+/// }
+/// ```
+///
+/// With incremental static regeneration (revalidate every 60 seconds):
+/// ```rust
+/// #[ssg(revalidate = 60)]
+/// pub async fn blog_post() -> String {
+///     "Post".to_string()
+/// }
+/// ```
+///
+/// # Parameters
+///
+/// * `revalidate` - Optional time in seconds for ISR. If specified, the
+///   page will be regenerated at runtime after this interval.
 #[proc_macro_attribute]
 pub fn ssg(attrs: TokenStream, input: TokenStream) -> TokenStream {
     // Use a simple parser for the attributes
