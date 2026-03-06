@@ -14,7 +14,10 @@ async fn main() -> anyhow::Result<()> {
     println!("📝 Blog with SSG + ISR enabled");
 
     let app = VirustApp::new();
-    app.serve(port).await?;
-
+    let router = app.router();
+    
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
+    axum::serve(listener, router).await?;
+    
     Ok(())
 }

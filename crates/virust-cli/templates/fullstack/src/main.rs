@@ -18,7 +18,9 @@ async fn main() -> anyhow::Result<()> {
     println!("   - Caching on API routes");
 
     let app = VirustApp::new();
-    app.serve(port).await?;
+    let router = app.router();
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port).await?;
+    axum::serve(listener, router).await?.await?;
 
     Ok(())
 }
