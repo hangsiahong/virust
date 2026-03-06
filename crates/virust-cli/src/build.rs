@@ -54,11 +54,14 @@ impl BuildCommand {
     fn build_ssg(&self) -> Result<()> {
         println!("🔨 Building static site...");
 
-        // Check if api directory exists
-        let api_dir = Path::new("api");
-        if !api_dir.exists() {
-            anyhow::bail!("API directory not found (expected 'api/' directory)");
-        }
+        // Check if api directory exists (try both api/ and src/api/)
+        let api_dir = if Path::new("api").exists() {
+            Path::new("api")
+        } else if Path::new("src/api").exists() {
+            Path::new("src/api")
+        } else {
+            anyhow::bail!("API directory not found (expected 'api/' or 'src/api/' directory)");
+        };
 
         // Determine output directory
         let output_dir = self.output.clone().unwrap_or_else(|| "dist".to_string());

@@ -25,22 +25,32 @@ pub fn execute(name: &str, template: &str) -> Result<()> {
     fs::create_dir_all(project_dir.join("web"))?;
 
     // Create Cargo.toml with git dependencies (or path for development)
-    let dependencies = if use_path_deps {
+    let (dependencies, build_dependencies) = if use_path_deps {
         // Development mode: use path dependencies
         let virust_path = std::env::var("VIRUST_PATH").unwrap();
-        format!(
+        let deps = format!(
             r#"[dependencies]
 virust-runtime = {{ path = "{}/crates/virust-runtime" }}
 virust-macros = {{ path = "{}/crates/virust-macros" }}
 virust-protocol = {{ path = "{}/crates/virust-protocol" }}"#,
             virust_path, virust_path, virust_path
-        )
+        );
+        let build_deps = format!(
+            r#"[build-dependencies]
+virust-build = {{ path = "{}/crates/virust-build" }}"#,
+            virust_path
+        );
+        (deps, build_deps)
     } else {
         // Production mode: use git dependencies
-        r#"[dependencies]
+        (
+            r#"[dependencies]
 virust-runtime = { git = "https://github.com/hangsiahong/virust.git", branch = "master" }
 virust-macros = { git = "https://github.com/hangsiahong/virust.git", branch = "master" }
-virust-protocol = { git = "https://github.com/hangsiahong/virust.git", branch = "master" }"#.to_string()
+virust-protocol = { git = "https://github.com/hangsiahong/virust.git", branch = "master" }"#.to_string(),
+            r#"[build-dependencies]
+virust-build = { git = "https://github.com/hangsiahong/virust.git", branch = "master" }"#.to_string()
+        )
     };
 
     let cargo_toml = format!(
@@ -50,6 +60,7 @@ version = "0.1.0"
 edition = "2021"
 
 {}
+
 serde = {{ version = "1", features = ["derive"] }}
 serde_json = "1"
 tokio = {{ version = "1", features = ["full"] }}
@@ -59,8 +70,9 @@ anyhow = "1"
 lazy_static = "1.4"
 chrono = "0.4"
 uuid = {{ version = "1.0", features = ["v4"] }}
-"#,
-        crate_name, dependencies
+
+{}"#,
+        crate_name, dependencies, build_dependencies
     );
     fs::write(project_dir.join("Cargo.toml"), cargo_toml)?;
 
@@ -616,32 +628,22 @@ fn setup_ssr_blog_template(project_dir: &Path) -> Result<()> {
 pub fn register_routes(router: axum::Router) -> axum::Router {
     use axum::routing::get;
 
-    // Register blog routes with SSR
+    // Register blog routes with SSG enabled
+    //
+    // These routes use Static Site Generation (SSG):
+    // - /blog: Uses ISR with 1-hour revalidation (see route.rs)
+    // - /about: Fully static, no revalidation (see route.rs)
+    //
+    // To build static files:
+    //   virust build --ssg
     //
     // SSG vs SSR:
-    // - SSR (Server-Side Rendering): HTML generated on each request (current behavior)
+    // - SSR (Server-Side Rendering): HTML generated on each request
     // - SSG (Static Site Generation): HTML pre-generated at build time
     // - ISR (Incremental Static Regeneration): Static pages with periodic revalidation
     //
-    // To enable SSG for these routes:
-    // 1. Add #[ssg] or #[ssg(revalidate = N)] attributes in route.rs
-    // 2. Add virust-build to Cargo.toml build dependencies:
-    //    [build-dependencies]
-    //    virust-build = { path = "..." }
-    // 3. Run: `virust build --ssg`
-    //
-    // Example in route.rs:
-    // ```rust
-    // use virust_macros::ssg;
-    //
-    // #[ssg(revalidate = 3600)]  // ISR: revalidate every hour
-    // #[get]
-    // pub async fn home() -> Html<String> { ... }
-    //
-    // #[ssg]  // Pure static
-    // #[get]
-    // pub async fn about() -> Html<String> { ... }
-    // ```
+    // The #[ssg] attributes on these routes enable static site generation.
+    // Check src/api/route.rs to see the #[ssg] and #[ssg(revalidate = N)] attributes.
     router
         .route("/blog", get(route::home))
         .route("/about", get(route::about))
@@ -649,23 +651,21 @@ pub fn register_routes(router: axum::Router) -> axum::Router {
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
-    // Create api/route.rs with SSR implementation and SSG examples
+    // Create api/route.rs with SSR and SSG implementation
     let route_rs = r##"use axum::response::Html;
-use virust_macros::get;
+use virust_macros::{get, ssg};
 use virust_runtime::RenderedHtml;
 
-/// Home page with server-side rendering
+/// Home page with ISR (Incremental Static Regeneration)
 ///
-/// SSG Example: To make this page static with ISR, add the #[ssg] attribute:
-/// ```rust
-/// use virust_macros::ssg;
+/// This page uses SSG with a 1-hour revalidation time.
+/// - Static HTML is generated at build time: `virust build --ssg`
+/// - At runtime, the page is served from the static cache
+/// - After 1 hour, the page is regenerated on next request
 ///
-/// #[ssg(revalidate = 3600)]  // Revalidate every hour
-/// #[get]
-/// pub async fn home() -> Html<String> { ... }
-/// ```
-/// Then run: `virust build --ssg`
+/// Benefits: Fast initial load, excellent SEO, periodic content updates
 #[get]
+#[ssg(revalidate = 3600)]
 pub async fn home() -> Html<String> {
     let rendered = RenderedHtml::new("HomePage");
 
@@ -692,18 +692,16 @@ pub async fn home() -> Html<String> {
     }
 }
 
-/// About page with static generation example
+/// About page with static generation
 ///
-/// SSG Example: To make this page fully static, add the #[ssg] attribute:
-/// ```rust
-/// use virust_macros::ssg;
+/// This page is fully static with no revalidation.
+/// - Static HTML is generated once at build time: `virust build --ssg`
+/// - The page is served from the static cache
+/// - No regeneration unless you rebuild
 ///
-/// #[ssg]  // Pure static, no revalidation
-/// #[get]
-/// pub async fn about() -> Html<String> { ... }
-/// ```
-/// Then run: `virust build --ssg`
+/// Benefits: Instant loading, perfect for rarely-changing content
 #[get]
+#[ssg]
 pub async fn about() -> Html<String> {
     let rendered = RenderedHtml::new("AboutPage");
 
@@ -999,17 +997,17 @@ fn setup_ssr_dashboard_template(project_dir: &Path) -> Result<()> {
 pub fn register_routes(router: axum::Router) -> axum::Router {
     use axum::routing::get;
 
-    // Register dashboard routes with SSR
+    // Register dashboard routes with SSG enabled
     //
-    // To enable SSG for these routes:
-    // 1. Add #[ssg] or #[ssg(revalidate = N)] attributes in route.rs
-    // 2. Add virust-build to Cargo.toml build dependencies
-    // 3. Run: `virust build --ssg`
+    // These routes use Static Site Generation (SSG):
+    // - /dashboard: Uses ISR with 5-minute revalidation (see route.rs)
+    // - /settings: Fully static, no revalidation (see route.rs)
     //
-    // When to use SSG:
-    // - Use #[ssg] for static pages that rarely change (settings, about)
-    // - Use #[ssg(revalidate = N)] for pages with data that changes periodically (dashboard with stats)
-    // - No #[ssg] attribute for fully dynamic pages (real-time data, user-specific content)
+    // To build static files:
+    //   virust build --ssg
+    //
+    // The #[ssg] attributes on these routes enable static site generation.
+    // Check src/api/route.rs to see the #[ssg] and #[ssg(revalidate = N)] attributes.
     router
         .route("/dashboard", get(route::dashboard))
         .route("/settings", get(route::settings))
@@ -1017,24 +1015,22 @@ pub fn register_routes(router: axum::Router) -> axum::Router {
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
-    // Create api/route.rs with SSR implementation and SSG examples
+    // Create api/route.rs with SSR and SSG implementation
     let route_rs = r##"use axum::response::Html;
-use virust_macros::get;
+use virust_macros::{get, ssg};
 use virust_runtime::RenderedHtml;
 use serde_json::json;
 
-/// Dashboard page with server-side rendering and data
+/// Dashboard page with ISR (Incremental Static Regeneration)
 ///
-/// SSG Example: To make this page static with ISR, add the #[ssg] attribute:
-/// ```rust
-/// use virust_macros::ssg;
+/// This page uses SSG with a 5-minute revalidation time.
+/// - Static HTML is generated at build time: `virust build --ssg`
+/// - At runtime, the page is served from the static cache
+/// - After 5 minutes, stats are refreshed on next request
 ///
-/// #[ssg(revalidate = 300)]  // Revalidate every 5 minutes for near-real-time stats
-/// #[get]
-/// pub async fn dashboard() -> Html<String> { ... }
-/// ```
-/// Then run: `virust build --ssg`
+/// Benefits: Fast loading, near-real-time data, reduced server load
 #[get]
+#[ssg(revalidate = 300)]
 pub async fn dashboard() -> Html<String> {
     // In a real app, you might fetch this data from a database
     let stats = json!({
@@ -1069,18 +1065,16 @@ pub async fn dashboard() -> Html<String> {
     }
 }
 
-/// Settings page with static generation example
+/// Settings page with static generation
 ///
-/// SSG Example: To make this page fully static, add the #[ssg] attribute:
-/// ```rust
-/// use virust_macros::ssg;
+/// This page is fully static with no revalidation.
+/// - Static HTML is generated once at build time: `virust build --ssg`
+/// - The page is served from the static cache
+/// - No regeneration unless you rebuild
 ///
-/// #[ssg]  // Pure static, no revalidation
-/// #[get]
-/// pub async fn settings() -> Html<String> { ... }
-/// ```
-/// Then run: `virust build --ssg`
+/// Benefits: Instant loading, perfect for settings pages that rarely change
 #[get]
+#[ssg]
 pub async fn settings() -> Html<String> {
     let rendered = RenderedHtml::new("SettingsPage");
 
