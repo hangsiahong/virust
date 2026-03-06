@@ -1,6 +1,14 @@
 use crate::registry::{TypeDefinition, RouteRegistry};
 use std::collections::HashMap;
 
+/// Field information extracted from a struct
+#[derive(Debug, Clone)]
+struct FieldInfo {
+    name: String,
+    type_name: String,
+    is_optional: bool,
+}
+
 /// Map a Rust type to TypeScript type
 pub fn map_rust_type_to_ts(rust_type: &str) -> String {
     // Remove spaces that syn might add
@@ -57,12 +65,20 @@ impl TypeScriptGenerator {
         }
 
         // Generate type interfaces
-        // Note: Field-level type extraction from Rust structs is planned for future versions
-        // Current implementation generates interface declarations without field definitions
         for type_name in unique_types {
             ts.push_str(&format!("export interface {} {{\n", type_name));
-            ts.push_str("  // Field definitions will be added in future versions\n");
-            ts.push_str("  // For now, manually define the interface fields based on your Rust structs\n");
+
+            // Try to find struct definition in codebase
+            if let Some(fields) = self.extract_struct_fields(&type_name) {
+                for field in fields {
+                    let ts_type = map_rust_type_to_ts(&field.type_name);
+                    let optional = if field.is_optional { "?" } else { "" };
+                    ts.push_str(&format!("  {}{}: {};\n", field.name, optional, ts_type));
+                }
+            } else {
+                ts.push_str("  // Could not extract fields\n");
+            }
+
             ts.push_str("}\n\n");
         }
 
@@ -95,6 +111,15 @@ impl TypeScriptGenerator {
         ));
         ts.push_str(&format!("  return wsCall(\"{}\", req);\n", def.name));
         ts.push_str("}\n\n");
+    }
+
+    /// Extract struct fields from a type name
+    /// This will be implemented in next task
+    /// For now, returns None to use fallback message
+    fn extract_struct_fields(&self, _type_name: &str) -> Option<Vec<FieldInfo>> {
+        // This will be implemented in next task
+        // For now, return None to use fallback
+        None
     }
 }
 
@@ -165,5 +190,29 @@ mod tests {
         assert_eq!(map_rust_type_to_ts("bool"), "boolean");
         assert_eq!(map_rust_type_to_ts("Vec<String>"), "string[]");
         assert_eq!(map_rust_type_to_ts("Option<i32>"), "number | null");
+    }
+
+    #[test]
+    fn test_generate_complete_interface() {
+        use std::collections::HashMap;
+        use crate::registry::TypeDefinition;
+
+        let mut types = HashMap::new();
+        types.insert(
+            "createTodo".to_string(),
+            TypeDefinition {
+                name: "createTodo".to_string(),
+                input_type: "CreateTodoRequest".to_string(),
+                output_type: "TodoResponse".to_string(),
+            },
+        );
+
+        let generator = TypeScriptGenerator::new(types);
+        let output = generator.generate();
+
+        // Should generate interface declaration
+        assert!(output.contains("export interface CreateTodoRequest"));
+        // Should contain fallback comment since extract_struct_fields returns None
+        assert!(output.contains("// Could not extract fields"));
     }
 }
