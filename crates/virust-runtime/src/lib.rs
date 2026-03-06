@@ -11,6 +11,7 @@ pub mod inventory_registry;
 pub mod hmr;
 pub mod render;
 pub mod middleware;
+pub mod client;
 pub use render::RenderedHtml;
 pub use middleware::ssr_middleware;
 
@@ -88,6 +89,7 @@ impl VirustApp {
             .route("/__types", get(http::types_handler))
             .route("/__hmr", get(hmr_websocket_handler))
             .route("/ws", get(ws_upgrade))
+            .route("/bun/client.js", get(client::serve_client_script))
             .with_state(self.hmr.clone());
 
         // Note: Automatic route registration from inventory is not yet implemented

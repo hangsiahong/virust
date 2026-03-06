@@ -9,6 +9,16 @@ const React = { createElement };
 
 const RENDER_CACHE = new Map();
 
+// HTML escape function to prevent XSS attacks
+function htmlEscape(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // Validate component path is within allowed directory and has valid extension
 function validateComponentPath(componentPath) {
   if (!path.isAbsolute(componentPath)) {
@@ -69,9 +79,10 @@ const renderer = {
       const isClient = isClientComponent(validatedPath);
 
       if (isClient) {
-        // Client component - return placeholder
+        // Client component - return placeholder with HTML-escaped props
+        const propsString = htmlEscape(JSON.stringify(validatedProps));
         return {
-          html: `<div data-component="${validatedPath}" data-props='${JSON.stringify(validatedProps)}' data-client></div>`,
+          html: `<div data-component="${htmlEscape(validatedPath)}" data-props='${propsString}' data-client></div>`,
           hydrationData: JSON.stringify(validatedProps),
           isClientComponent: true
         };

@@ -97,10 +97,7 @@ impl RenderedHtml {
 <body>
     <div id="root">{}</div>
     <script type="application/json" id="__VIRUST_PROPS__">{}</script>
-    <script>
-        // Client-side hydration will be added in Task 15
-        console.log('Virust SSR: Props embedded', JSON.parse(document.getElementById('__VIRUST_PROPS__').textContent));
-    </script>
+    <script type="module" src="/bun/client.js"></script>
 </body>
 </html>"#,
             self.component_name,
