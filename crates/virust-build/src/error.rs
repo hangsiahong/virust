@@ -16,6 +16,9 @@ pub enum BuildError {
 
     #[error("Anyhow error: {0}")]
     AnyhowError(#[from] anyhow::Error),
+
+    #[error("Time error: {0}")]
+    TimeError(#[from] std::time::SystemTimeError),
 }
 
 pub type Result<T> = std::result::Result<T, BuildError>;
