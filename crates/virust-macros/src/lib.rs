@@ -95,6 +95,28 @@ fn parse_route_args(args: &Punctuated<FnArg, Comma>) -> Vec<RouteArg> {
                             None
                         }
                     }
+                    Pat::Verbatim(_) => {
+                        // Handle verbatim patterns by attempting to parse them
+                        // This catches complex patterns we don't explicitly handle
+                        // For now, we'll try to extract from the string representation
+                        let pattern_str = quote::quote!(#pat).to_string();
+                        // Simple heuristic: look for the identifier after the last '('
+                        if let Some(start) = pattern_str.rfind('(') {
+                            let rest = &pattern_str[start + 1..];
+                            if let Some(end) = rest.find(')') {
+                                let ident_str = &rest[..end];
+                                if let Ok(ident) = syn::parse_str::<syn::Ident>(ident_str) {
+                                    Some(ident)
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    }
                     _ => None,
                 };
 
