@@ -946,10 +946,25 @@ pub fn render_component(attr: TokenStream, item: TokenStream) -> TokenStream {
         })
         .collect();
 
-    // Generate props building code from path parameters
-    let props_building: Vec<_> = path_params.iter()
+    // Generate parameter declarations for wrapper signature
+    let wrapper_params: Vec<_> = path_params.iter()
         .map(|param| {
             let name = &param.name;
+            let typ = &param.typ;
+            quote! {
+                #name: #typ
+            }
+        })
+        .collect();
+
+    // Generate parameter names for props building
+    let param_names: Vec<_> = path_params.iter()
+        .map(|param| &param.name)
+        .collect();
+
+    // Generate props building code from path parameters
+    let props_building: Vec<_> = param_names.iter()
+        .map(|name| {
             quote! {
                 props[#name] = serde_json::to_value(#name.clone()).unwrap();
             }
@@ -960,7 +975,7 @@ pub fn render_component(attr: TokenStream, item: TokenStream) -> TokenStream {
     let expanded = quote! {
         #original_fn
 
-        pub fn #wrapper_ident(#(#path_params),*) -> impl axum::response::IntoResponse {
+        pub fn #wrapper_ident(#(#wrapper_params),*) -> impl axum::response::IntoResponse {
             use ::virust_runtime::RenderedHtml;
 
             let mut props = ::serde_json::json!({});
