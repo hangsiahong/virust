@@ -554,6 +554,20 @@ fn setup_ssr_blog_template(project_dir: &Path) -> Result<()> {
     fs::write(project_dir.join(".virust/client.js"), include_str!("../../virust-bun/bundled/client.js"))?;
     fs::write(project_dir.join(".virust/package.json"), include_str!("../../virust-bun/bundled/package.json"))?;
 
+    // Also create package.json in project root for JSX resolution
+    // When Bun loads JSX files from web/components, it looks for deps from project root
+    let root_package_json = r#"{
+  "name": "virust-ssr-project",
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
+"#;
+    fs::write(project_dir.join("package.json"), root_package_json)?;
+
     // Create lib.rs
     let lib_rs = r#"pub mod api;
 "#;
@@ -768,6 +782,20 @@ fn setup_ssr_dashboard_template(project_dir: &Path) -> Result<()> {
     fs::write(project_dir.join(".virust/renderer.js"), include_str!("../../virust-bun/bundled/renderer.js"))?;
     fs::write(project_dir.join(".virust/client.js"), include_str!("../../virust-bun/bundled/client.js"))?;
     fs::write(project_dir.join(".virust/package.json"), include_str!("../../virust-bun/bundled/package.json"))?;
+
+    // Also create package.json in project root for JSX resolution
+    // When Bun loads JSX files from web/components, it looks for deps from project root
+    let root_package_json = r#"{
+  "name": "virust-ssr-project",
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
+"#;
+    fs::write(project_dir.join("package.json"), root_package_json)?;
 
     // Create lib.rs
     let lib_rs = r#"pub mod api;

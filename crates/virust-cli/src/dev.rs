@@ -6,24 +6,53 @@ use tokio::signal;
 pub async fn execute() -> Result<()> {
     println!("🚀 Starting Virust development server...");
 
-    // Step 0: Install Bun dependencies if .virust directory exists
+    // Step 0: Install Bun dependencies if package.json exists
+    // Install in both project root (for JSX resolution) and .virust (for renderer)
+    let project_root = PathBuf::from(".");
     let virust_dir = PathBuf::from(".virust");
-    if virust_dir.exists() && virust_dir.join("package.json").exists() {
+
+    let needs_install = project_root.join("package.json").exists() || virust_dir.join("package.json").exists();
+
+    if needs_install {
         println!("📦 Installing Bun dependencies...");
-        match tokio::process::Command::new("bun")
-            .args(["install"])
-            .current_dir(&virust_dir)
-            .status()
-            .await
-        {
-            Ok(status) if status.success() => {
-                println!("✅ Dependencies installed");
+
+        // Install in project root for JSX resolution
+        if project_root.join("package.json").exists() {
+            match tokio::process::Command::new("bun")
+                .args(["install"])
+                .current_dir(&project_root)
+                .status()
+                .await
+            {
+                Ok(status) if status.success() => {
+                    println!("✅ Dependencies installed in project root");
+                }
+                Ok(_) => {
+                    println!("⚠️  Bun install failed in project root, but continuing...");
+                }
+                Err(_) => {
+                    println!("ℹ️  Bun not found - skipping dependency installation");
+                }
             }
-            Ok(_) => {
-                println!("⚠️  Bun install failed, but continuing...");
-            }
-            Err(_) => {
-                println!("ℹ️  Bun not found - skipping dependency installation");
+        }
+
+        // Install in .virust for renderer
+        if virust_dir.join("package.json").exists() {
+            match tokio::process::Command::new("bun")
+                .args(["install"])
+                .current_dir(&virust_dir)
+                .status()
+                .await
+            {
+                Ok(status) if status.success() => {
+                    println!("✅ Dependencies installed in .virust");
+                }
+                Ok(_) => {
+                    println!("⚠️  Bun install failed in .virust, but continuing...");
+                }
+                Err(_) => {
+                    println!("ℹ️  Bun not found - skipping dependency installation");
+                }
             }
         }
     }
