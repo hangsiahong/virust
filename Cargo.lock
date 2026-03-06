@@ -1797,8 +1797,10 @@ dependencies = [
  "axum",
  "clap",
  "notify",
+ "num_cpus",
  "serde_json",
  "tokio",
+ "virust-build",
  "virust-bun",
  "virust-runtime",
 ]

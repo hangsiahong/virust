@@ -10,9 +10,11 @@ path = "src/main.rs"
 [dependencies]
 virust-runtime = { path = "../virust-runtime" }
 virust-bun = { path = "../virust-bun" }
+virust-build = { path = "../virust-build" }
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 notify = "6"
 axum = "0.7"
 serde_json = "1"
+num_cpus = "1.16"
