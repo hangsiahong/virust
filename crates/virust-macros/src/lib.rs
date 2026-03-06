@@ -49,10 +49,10 @@ fn extract_function_types(input: &ItemFn) -> (String, String) {
 pub fn ws(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = &input.sig.ident;
-    let fn_name_str = fn_name.to_string();
+    let _fn_name_str = fn_name.to_string();
 
     // Extract type information
-    let (input_type, output_type) = extract_function_types(&input);
+    let (_input_type, _output_type) = extract_function_types(&input);
 
     let expanded = quote! {
         #input
@@ -70,7 +70,7 @@ pub fn ws(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = &input.sig.ident;
-    let fn_name_str = fn_name.to_string();
+    let _fn_name_str = fn_name.to_string();
 
     // Check if function name is an HTTP method
     let http_method = match fn_name.to_string().to_uppercase().as_str() {
@@ -90,7 +90,7 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     // Extract type information
-    let (input_type, output_type) = extract_function_types(&input);
+    let (_input_type, _output_type) = extract_function_types(&input);
 
     let expanded = quote! {
         #input
@@ -108,10 +108,10 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = &input.sig.ident;
-    let fn_name_str = fn_name.to_string();
+    let _fn_name_str = fn_name.to_string();
 
     // Extract type information
-    let (input_type, output_type) = extract_function_types(&input);
+    let (_input_type, _output_type) = extract_function_types(&input);
 
     let expanded = quote! {
         #input
@@ -129,10 +129,10 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = &input.sig.ident;
-    let fn_name_str = fn_name.to_string();
+    let _fn_name_str = fn_name.to_string();
 
     // Extract type information
-    let (input_type, output_type) = extract_function_types(&input);
+    let (_input_type, _output_type) = extract_function_types(&input);
 
     let expanded = quote! {
         #input
@@ -150,10 +150,10 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
 pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input = parse_macro_input!(item as ItemFn);
     let fn_name = &input.sig.ident;
-    let fn_name_str = fn_name.to_string();
+    let _fn_name_str = fn_name.to_string();
 
     // Extract type information
-    let (input_type, output_type) = extract_function_types(&input);
+    let (_input_type, _output_type) = extract_function_types(&input);
 
     let expanded = quote! {
         #input

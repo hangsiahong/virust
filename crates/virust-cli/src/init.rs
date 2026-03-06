@@ -1,6 +1,7 @@
 use anyhow::Result;
 use std::fs;
 use std::path::Path;
+use std::env;
 
 pub fn execute(name: &str, template: &str) -> Result<()> {
     let project_dir = Path::new(name);
@@ -10,10 +11,23 @@ pub fn execute(name: &str, template: &str) -> Result<()> {
     }
 
     // Get virust workspace path for path dependencies
-    let virust_path = std::env::var("VIRUST_PATH").unwrap_or_else(|_| {
-        // If VIRUST_PATH not set, try to use relative path from current dir
-        "../..".to_string()
-    });
+    let virust_path_absolute = if let Ok(path) = std::env::var("VIRUST_PATH") {
+        path
+    } else {
+        // Default to absolute path of virust workspace (based on binary location)
+        // Binary is at target/release/virust, so go up 3 levels to get to repo root
+        env::current_exe()
+            .ok()
+            .and_then(|exe_path| exe_path.canonicalize().ok())
+            .and_then(|exe_path| {
+                exe_path.parent()
+                    .and_then(|parent| parent.parent())
+                    .and_then(|parent| parent.parent())
+                    .map(|p| p.to_path_buf())
+            })
+            .and_then(|path| path.to_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| ".".to_string())
+    };
 
     // Create project structure
     fs::create_dir_all(project_dir.join("src"))?;
@@ -42,9 +56,9 @@ chrono = "0.4"
 uuid = {{ version = "1.0", features = ["v4"] }}
 "#,
         name,
-        format!("{}/crates/virust-runtime", virust_path),
-        format!("{}/crates/virust-macros", virust_path),
-        format!("{}/crates/virust-protocol", virust_path),
+        format!("{}/crates/virust-runtime", virust_path_absolute),
+        format!("{}/crates/virust-macros", virust_path_absolute),
+        format!("{}/crates/virust-protocol", virust_path_absolute),
     );
     fs::write(project_dir.join("Cargo.toml"), cargo_toml)?;
 
@@ -293,7 +307,7 @@ fn setup_todo_template(project_dir: &Path) -> Result<()> {
     let todos_route = r#"use virust_macros::{get, post};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use virust_protocol::InMemoryPersistence;
+use virust_protocol::{Persistence, InMemoryPersistence};
 
 #[derive(Deserialize, Serialize)]
 pub struct CreateTodoRequest {
@@ -317,7 +331,7 @@ lazy_static::lazy_static! {
 
 /// List all todos
 #[get]
-async fn route() -> String {
+async fn list_todos() -> String {
     match PERSISTENCE.list("todos").await {
         Ok(todos) => serde_json::to_string(&todos).unwrap_or_else(|_| "[]".to_string()),
         Err(_) => "[]".to_string(),
@@ -326,10 +340,15 @@ async fn route() -> String {
 
 /// Create a new todo
 #[post]
-async fn route(#[body] payload: CreateTodoRequest) -> String {
+async fn create_todo(payload: String) -> String {
+    let input: CreateTodoRequest = match serde_json::from_str(&payload) {
+        Ok(req) => req,
+        Err(_) => return serde_json::json!({"error": "Invalid JSON"}).to_string(),
+    };
+
     let todo = serde_json::json!({
-        "title": payload.title,
-        "description": payload.description,
+        "title": input.title,
+        "description": input.description,
         "completed": false,
         "created_at": chrono::Utc::now().timestamp(),
     });
@@ -338,8 +357,8 @@ async fn route(#[body] payload: CreateTodoRequest) -> String {
         Ok(id) => {
             let response = serde_json::json!({
                 "id": id,
-                "title": payload.title,
-                "description": payload.description,
+                "title": input.title,
+                "description": input.description,
                 "completed": false,
                 "created_at": chrono::Utc::now().timestamp(),
             });
@@ -357,8 +376,9 @@ async fn route(#[body] payload: CreateTodoRequest) -> String {
     fs::create_dir_all(project_dir.join("src/api/todos_id"))?;
     let todos_id_route = r#"use virust_macros::{get, put, delete};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::sync::Arc;
-use virust_protocol::InMemoryPersistence;
+use virust_protocol::{Persistence, InMemoryPersistence};
 
 #[derive(Deserialize)]
 pub struct UpdateTodoRequest {
@@ -383,8 +403,8 @@ lazy_static::lazy_static! {
 
 /// Get a specific todo by ID
 #[get]
-async fn route(#[path] id: String) -> String {
-    match PERSISTENCE.get("todos", &id).await {
+async fn get_todo(id: String) -> String {
+    match PERSISTENCE.get::<Value>("todos", &id).await {
         Ok(Some(todo)) => serde_json::to_string(&todo).unwrap_or_else(|_| "{}".to_string()),
         Ok(None) => serde_json::json!({"error": "Todo not found"}).to_string(),
         Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
@@ -393,23 +413,32 @@ async fn route(#[path] id: String) -> String {
 
 /// Update a todo by ID
 #[put]
-async fn route(#[path] id: String, #[body] payload: UpdateTodoRequest) -> String {
+async fn update_todo(id: String, payload: String) -> String {
+    let input: UpdateTodoRequest = match serde_json::from_str(&payload) {
+        Ok(req) => req,
+        Err(_) => return serde_json::json!({"error": "Invalid JSON"}).to_string(),
+    };
+
     // First get the existing todo
-    let existing = match PERSISTENCE.get("todos", &id).await {
+    let existing = match PERSISTENCE.get::<Value>("todos", &id).await {
         Ok(Some(todo)) => todo,
         Ok(None) => return serde_json::json!({"error": "Todo not found"}).to_string(),
         Err(e) => return serde_json::json!({"error": e.to_string()}).to_string(),
     };
 
     // Update fields if provided
-    let mut updated = existing;
-    if let Some(title) = payload.title {
-        updated["title"] = serde_json::Value::String(title);
+    let mut updated = existing.clone();
+    if let Some(title) = &input.title {
+        updated["title"] = serde_json::Value::String(title.clone());
     }
-    if let Some(description) = payload.description {
-        updated["description"] = serde_json::Value::String(description);
+    if let Some(description) = &input.description {
+        updated["description"] = if let Some(desc) = description {
+            serde_json::Value::String(desc.clone())
+        } else {
+            serde_json::Value::Null
+        };
     }
-    if let Some(completed) = payload.completed {
+    if let Some(completed) = input.completed {
         updated["completed"] = serde_json::Value::Bool(completed);
     }
 
@@ -421,7 +450,7 @@ async fn route(#[path] id: String, #[body] payload: UpdateTodoRequest) -> String
 
 /// Delete a todo by ID
 #[delete]
-async fn route(#[path] id: String) -> String {
+async fn delete_todo(id: String) -> String {
     match PERSISTENCE.delete("todos", &id).await {
         Ok(_) => serde_json::json!({"success": true}).to_string(),
         Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
@@ -437,19 +466,18 @@ async fn route(#[path] id: String) -> String {
 }
 
 fn copy_template_files(project_dir: &Path, template_name: &str) -> Result<()> {
-    // Get the template directory path
-    let template_dir = Path::new("crates/virust-cli/templates").join(template_name).join("web");
-
-    // Copy each file from the template
-    for file in &["index.html", "main.js", "styles.css"] {
-        let src = template_dir.join(file);
-        let dst = project_dir.join("web").join(file);
-
-        if src.exists() {
-            let content = fs::read_to_string(&src)?;
-            fs::write(&dst, content)?;
+    match template_name {
+        "chat" => {
+            fs::write(project_dir.join("web/index.html"), include_str!("../templates/chat/web/index.html"))?;
+            fs::write(project_dir.join("web/main.js"), include_str!("../templates/chat/web/main.js"))?;
+            fs::write(project_dir.join("web/styles.css"), include_str!("../templates/chat/web/styles.css"))?;
         }
+        "todo" => {
+            fs::write(project_dir.join("web/index.html"), include_str!("../templates/todo/web/index.html"))?;
+            fs::write(project_dir.join("web/main.js"), include_str!("../templates/todo/web/main.js"))?;
+            fs::write(project_dir.join("web/styles.css"), include_str!("../templates/todo/web/styles.css"))?;
+        }
+        _ => {}
     }
-
     Ok(())
 }

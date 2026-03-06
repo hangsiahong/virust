@@ -29,9 +29,12 @@ impl TypeScriptGenerator {
         }
 
         // Generate type interfaces
+        // Note: Field-level type extraction from Rust structs is planned for future versions
+        // Current implementation generates interface declarations without field definitions
         for type_name in unique_types {
             ts.push_str(&format!("export interface {} {{\n", type_name));
-            ts.push_str("  // TODO: Add fields based on Rust struct\n");
+            ts.push_str("  // Field definitions will be added in future versions\n");
+            ts.push_str("  // For now, manually define the interface fields based on your Rust structs\n");
             ts.push_str("}\n\n");
         }
 

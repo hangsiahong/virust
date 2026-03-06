@@ -4,7 +4,6 @@ use axum::{
     },
     response::IntoResponse,
 };
-use futures_util::StreamExt;
 
 pub async fn ws_upgrade(ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.on_upgrade(handle_socket)
