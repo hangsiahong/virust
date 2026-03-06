@@ -28,6 +28,14 @@ pub struct RouteEntry {
 
 inventory::collect!(RouteEntry);
 
+/// Route with handler for Axum registration
+#[derive(Clone)]
+pub struct RegisteredRoute {
+    pub path: String,
+    pub method: String,
+    pub handler: HttpHandler,
+}
+
 #[derive(Clone, Debug)]
 pub struct TypeDefinition {
     pub name: String,
@@ -96,6 +104,31 @@ impl RouteRegistry {
     pub fn generate_typescript(&self) -> String {
         let generator = TypeScriptGenerator::from(self);
         generator.generate()
+    }
+
+    pub fn get_routes(&self) -> Vec<RegisteredRoute> {
+        let mut routes = Vec::new();
+
+        for route_entry in collect_routes() {
+            let method = match route_entry.route_type {
+                RouteType::HttpGet => "GET",
+                RouteType::HttpPost => "POST",
+                RouteType::HttpPut => "PUT",
+                RouteType::HttpDelete => "DELETE",
+                RouteType::WebSocket => continue, // Skip WebSocket routes for now
+            };
+
+            // Get the handler from http_routes if it exists
+            if let Some(handler) = self.get_http(route_entry.path) {
+                routes.push(RegisteredRoute {
+                    path: route_entry.path.to_string(),
+                    method: method.to_string(),
+                    handler,
+                });
+            }
+        }
+
+        routes
     }
 }
 
