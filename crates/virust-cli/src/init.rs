@@ -558,9 +558,9 @@ fn setup_ssr_blog_template(project_dir: &Path) -> Result<()> {
 pub fn register_routes(router: axum::Router) -> axum::Router {
     use axum::routing::get;
 
-    // Register home page route with SSR
-    // Note: home() returns RenderedHtml, so we use it directly without _wrapper suffix
-    router.route("/", get(route::home))
+    // Register blog routes with SSR
+    // Use /blog prefix to avoid conflict with /__types route
+    router.route("/blog", get(route::home))
 }
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
@@ -714,6 +714,18 @@ export default async function HomePage() {
 // You can add client-side interactivity here
 "#;
     fs::write(project_dir.join("web/main.js"), main_js)?;
+
+    // Create web/package.json for React dependencies
+    let package_json = r#"{
+  "name": "ssr-blog-frontend",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
+"#;
+    fs::write(project_dir.join("web/package.json"), package_json)?;
 
     Ok(())
 }
@@ -994,6 +1006,18 @@ export default function RefreshButton() {
 // Client components (with 'use client') are hydrated here
 "#;
     fs::write(project_dir.join("web/main.js"), main_js)?;
+
+    // Create web/package.json for React dependencies
+    let package_json = r#"{
+  "name": "ssr-dashboard-frontend",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}
+"#;
+    fs::write(project_dir.join("web/package.json"), package_json)?;
 
     Ok(())
 }
