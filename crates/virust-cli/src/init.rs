@@ -617,18 +617,54 @@ pub fn register_routes(router: axum::Router) -> axum::Router {
     use axum::routing::get;
 
     // Register blog routes with SSR
-    // Use /blog prefix to avoid conflict with /__types route
-    router.route("/blog", get(route::home))
+    //
+    // SSG vs SSR:
+    // - SSR (Server-Side Rendering): HTML generated on each request (current behavior)
+    // - SSG (Static Site Generation): HTML pre-generated at build time
+    // - ISR (Incremental Static Regeneration): Static pages with periodic revalidation
+    //
+    // To enable SSG for these routes:
+    // 1. Add #[ssg] or #[ssg(revalidate = N)] attributes in route.rs
+    // 2. Add virust-build to Cargo.toml build dependencies:
+    //    [build-dependencies]
+    //    virust-build = { path = "..." }
+    // 3. Run: `virust build --ssg`
+    //
+    // Example in route.rs:
+    // ```rust
+    // use virust_macros::ssg;
+    //
+    // #[ssg(revalidate = 3600)]  // ISR: revalidate every hour
+    // #[get]
+    // pub async fn home() -> Html<String> { ... }
+    //
+    // #[ssg]  // Pure static
+    // #[get]
+    // pub async fn about() -> Html<String> { ... }
+    // ```
+    router
+        .route("/blog", get(route::home))
+        .route("/about", get(route::about))
 }
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
-    // Create api/route.rs with SSR implementation
+    // Create api/route.rs with SSR implementation and SSG examples
     let route_rs = r##"use axum::response::Html;
 use virust_macros::get;
 use virust_runtime::RenderedHtml;
 
 /// Home page with server-side rendering
+///
+/// SSG Example: To make this page static with ISR, add the #[ssg] attribute:
+/// ```rust
+/// use virust_macros::ssg;
+///
+/// #[ssg(revalidate = 3600)]  // Revalidate every hour
+/// #[get]
+/// pub async fn home() -> Html<String> { ... }
+/// ```
+/// Then run: `virust build --ssg`
 #[get]
 pub async fn home() -> Html<String> {
     let rendered = RenderedHtml::new("HomePage");
@@ -641,6 +677,40 @@ pub async fn home() -> Html<String> {
             eprintln!("SSR Error: {}", e);
 
             // Return a simple error page
+            Html(format!(
+                r#"<!DOCTYPE html>
+<html>
+<head><title>Error</title></head>
+<body>
+    <h1>SSR Error</h1>
+    <p>{}</p>
+</body>
+</html>"#,
+                e.to_string()
+            ))
+        }
+    }
+}
+
+/// About page with static generation example
+///
+/// SSG Example: To make this page fully static, add the #[ssg] attribute:
+/// ```rust
+/// use virust_macros::ssg;
+///
+/// #[ssg]  // Pure static, no revalidation
+/// #[get]
+/// pub async fn about() -> Html<String> { ... }
+/// ```
+/// Then run: `virust build --ssg`
+#[get]
+pub async fn about() -> Html<String> {
+    let rendered = RenderedHtml::new("AboutPage");
+
+    match rendered.render().await {
+        Ok(html) => Html(html),
+        Err(e) => {
+            eprintln!("SSR Error: {}", e);
             Html(format!(
                 r#"<!DOCTYPE html>
 <html>
@@ -760,6 +830,90 @@ export default function HomePage() {
 "#;
     fs::write(project_dir.join("web/components/HomePage.jsx"), home_page_jsx)?;
 
+    // Create AboutPage.jsx component
+    let about_page_jsx = r#"// AboutPage.jsx - Static page component
+export default function AboutPage() {
+  // This component is statically generated at build time
+  // Use #[ssg] attribute in Rust to enable static generation
+
+  return (
+    <div style={{
+      maxWidth: '800px',
+      margin: '50px auto',
+      padding: '20px',
+      fontFamily: 'system-ui, -apple-system, sans-serif'
+    }}>
+      <header style={{
+        marginBottom: '40px',
+        paddingBottom: '20px',
+        borderBottom: '1px solid #eaeaea'
+      }}>
+        <h1 style={{ fontSize: '2.5rem', marginBottom: '10px' }}>
+          About This Blog
+        </h1>
+        <p style={{ color: '#666', fontSize: '1.1rem' }}>
+          Built with Virust SSG
+        </p>
+      </header>
+
+      <main>
+        <section style={{ marginBottom: '40px' }}>
+          <h2 style={{ fontSize: '1.8rem', marginBottom: '20px' }}>
+            What is SSG?
+          </h2>
+          <p style={{ color: '#666', lineHeight: '1.6', marginBottom: '15px' }}>
+            <strong>Static Site Generation (SSG)</strong> pre-renders pages at build time,
+            creating static HTML files that can be served instantly.
+          </p>
+          <p style={{ color: '#666', lineHeight: '1.6', marginBottom: '15px' }}>
+            This page is marked with <code>#[ssg]</code> in Rust, which tells Virust to
+            generate it statically when you run <code>virust build --ssg</code>.
+          </p>
+        </section>
+
+        <section style={{ marginBottom: '40px' }}>
+          <h2 style={{ fontSize: '1.8rem', marginBottom: '20px' }}>
+            Benefits of SSG
+          </h2>
+          <ul style={{ lineHeight: '1.8', color: '#666', paddingLeft: '20px' }}>
+            <li><strong>Lightning Fast:</strong> Pre-rendered HTML serves instantly</li>
+            <li><strong>Great SEO:</strong> Search engines can crawl static HTML easily</li>
+            <li><strong>Low Server Load:</strong> No need to render pages on each request</li>
+            <li><strong>CDN Friendly:</strong> Static files can be distributed globally</li>
+          </ul>
+        </section>
+
+        <section style={{
+          padding: '30px',
+          background: '#f0f7ff',
+          borderRadius: '8px'
+        }}>
+          <h3 style={{ fontSize: '1.4rem', marginBottom: '10px' }}>
+            SSG vs SSR vs ISR
+          </h3>
+          <ul style={{ lineHeight: '1.8', color: '#666', paddingLeft: '20px' }}>
+            <li><strong>SSG:</strong> Static, generated at build time (this page)</li>
+            <li><strong>SSR:</strong> Dynamic, rendered on each request</li>
+            <li><strong>ISR:</strong> Static with periodic revalidation (blog home page)</li>
+          </ul>
+        </section>
+      </main>
+
+      <footer style={{
+        marginTop: '60px',
+        paddingTop: '20px',
+        borderTop: '1px solid #eaeaea',
+        textAlign: 'center',
+        color: '#888'
+      }}>
+        <p>© 2026 My Blog. Built with Virust.</p>
+      </footer>
+    </div>
+  );
+}
+"#;
+    fs::write(project_dir.join("web/components/AboutPage.jsx"), about_page_jsx)?;
+
     // Create web/index.html
     let index_html = r#"<!DOCTYPE html>
 <html lang="en">
@@ -845,20 +999,41 @@ fn setup_ssr_dashboard_template(project_dir: &Path) -> Result<()> {
 pub fn register_routes(router: axum::Router) -> axum::Router {
     use axum::routing::get;
 
-    // Register dashboard route with SSR and data passing
-    // Use /dashboard prefix to avoid conflict with /__types route
-    router.route("/dashboard", get(route::dashboard))
+    // Register dashboard routes with SSR
+    //
+    // To enable SSG for these routes:
+    // 1. Add #[ssg] or #[ssg(revalidate = N)] attributes in route.rs
+    // 2. Add virust-build to Cargo.toml build dependencies
+    // 3. Run: `virust build --ssg`
+    //
+    // When to use SSG:
+    // - Use #[ssg] for static pages that rarely change (settings, about)
+    // - Use #[ssg(revalidate = N)] for pages with data that changes periodically (dashboard with stats)
+    // - No #[ssg] attribute for fully dynamic pages (real-time data, user-specific content)
+    router
+        .route("/dashboard", get(route::dashboard))
+        .route("/settings", get(route::settings))
 }
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
-    // Create api/route.rs with SSR implementation
+    // Create api/route.rs with SSR implementation and SSG examples
     let route_rs = r##"use axum::response::Html;
 use virust_macros::get;
 use virust_runtime::RenderedHtml;
 use serde_json::json;
 
 /// Dashboard page with server-side rendering and data
+///
+/// SSG Example: To make this page static with ISR, add the #[ssg] attribute:
+/// ```rust
+/// use virust_macros::ssg;
+///
+/// #[ssg(revalidate = 300)]  // Revalidate every 5 minutes for near-real-time stats
+/// #[get]
+/// pub async fn dashboard() -> Html<String> { ... }
+/// ```
+/// Then run: `virust build --ssg`
 #[get]
 pub async fn dashboard() -> Html<String> {
     // In a real app, you might fetch this data from a database
@@ -879,6 +1054,40 @@ pub async fn dashboard() -> Html<String> {
             eprintln!("SSR Error: {}", e);
 
             // Return a simple error page
+            Html(format!(
+                r#"<!DOCTYPE html>
+<html>
+<head><title>Error</title></head>
+<body>
+    <h1>SSR Error</h1>
+    <p>{}</p>
+</body>
+</html>"#,
+                e.to_string()
+            ))
+        }
+    }
+}
+
+/// Settings page with static generation example
+///
+/// SSG Example: To make this page fully static, add the #[ssg] attribute:
+/// ```rust
+/// use virust_macros::ssg;
+///
+/// #[ssg]  // Pure static, no revalidation
+/// #[get]
+/// pub async fn settings() -> Html<String> { ... }
+/// ```
+/// Then run: `virust build --ssg`
+#[get]
+pub async fn settings() -> Html<String> {
+    let rendered = RenderedHtml::new("SettingsPage");
+
+    match rendered.render().await {
+        Ok(html) => Html(html),
+        Err(e) => {
+            eprintln!("SSR Error: {}", e);
             Html(format!(
                 r#"<!DOCTYPE html>
 <html>
@@ -1097,6 +1306,117 @@ export default function RefreshButton() {
 "#;
     fs::write(project_dir.join("web/components/RefreshButton.jsx"), refresh_button_jsx)?;
 
+    // Create SettingsPage.jsx component
+    let settings_page_jsx = r#"// SettingsPage.jsx - Static settings page component
+export default function SettingsPage() {
+  // This component is statically generated at build time
+  // Use #[ssg] attribute in Rust to enable static generation
+
+  return (
+    <div style={{
+      maxWidth: '1200px',
+      margin: '0 auto',
+      padding: '20px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      background: '#f5f5f5',
+      minHeight: '100vh'
+    }}>
+      <header style={{
+        marginBottom: '40px',
+        paddingBottom: '20px',
+        borderBottom: '2px solid #e0e0e0',
+        background: 'white',
+        padding: '30px',
+        borderRadius: '8px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+      }}>
+        <h1 style={{
+          fontSize: '2.5rem',
+          marginBottom: '10px',
+          color: '#333'
+        }}>
+          Settings
+        </h1>
+        <p style={{ color: '#666', fontSize: '1.1rem' }}>
+          Static page example
+        </p>
+      </header>
+
+      <main>
+        <section style={{
+          background: 'white',
+          padding: '30px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+          marginBottom: '20px'
+        }}>
+          <h2 style={{ fontSize: '1.8rem', marginBottom: '20px', color: '#333' }}>
+            Static Site Generation
+          </h2>
+          <p style={{ color: '#666', lineHeight: '1.6', marginBottom: '15px' }}>
+            This <strong>Settings</strong> page is marked with <code>#[ssg]</code> in Rust,
+            which means it's pre-rendered at build time as static HTML.
+          </p>
+          <p style={{ color: '#666', lineHeight: '1.6', marginBottom: '15px' }}>
+            Static pages are ideal for:
+          </p>
+          <ul style={{ lineHeight: '1.8', color: '#666', paddingLeft: '20px' }}>
+            <li>Settings pages that don't change frequently</li>
+            <li>Documentation pages</li>
+            <li>Legal pages (terms, privacy)</li>
+            <li>Help and support pages</li>
+          </ul>
+        </section>
+
+        <section style={{
+          background: 'white',
+          padding: '30px',
+          borderRadius: '8px',
+          boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+        }}>
+          <h2 style={{ fontSize: '1.8rem', marginBottom: '20px', color: '#333' }}>
+            SSG vs SSR Comparison
+          </h2>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: '20px'
+          }}>
+            <div style={{
+              padding: '20px',
+              background: '#f0f7ff',
+              borderRadius: '6px',
+              border: '1px solid #d0e3ff'
+            }}>
+              <h3 style={{ fontSize: '1.2rem', marginBottom: '10px', color: '#0066cc' }}>
+                This Page (SSG)
+              </h3>
+              <p style={{ color: '#666', lineHeight: '1.6', fontSize: '0.95rem' }}>
+                Pre-rendered at build time. Instant loading, perfect for rarely-changing content.
+              </p>
+            </div>
+            <div style={{
+              padding: '20px',
+              background: '#fff7e6',
+              borderRadius: '6px',
+              border: '1px solid #ffd966'
+            }}>
+              <h3 style={{ fontSize: '1.2rem', marginBottom: '10px', color: '#cc6600' }}>
+                Dashboard (ISR)
+              </h3>
+              <p style={{ color: '#666', lineHeight: '1.6', fontSize: '0.95rem' }}>
+                Static with 5-minute revalidation. Best balance of freshness and performance.
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+"#;
+    fs::write(project_dir.join("web/components/SettingsPage.jsx"), settings_page_jsx)?;
+
     // Create web/index.html
     let index_html = r#"<!DOCTYPE html>
 <html lang="en">
@@ -1214,6 +1534,22 @@ use axum::Router;
 /// Register all API routes with the router
 pub fn register_routes(router: Router) -> Router {
     // Simple approach: use the functions directly with Axum's built-in extractors
+    //
+    // Note: This TODO app uses SSR for all routes because the data is dynamic
+    // and user-specific. For static pages, you can add the #[ssg] attribute.
+    //
+    // Example of adding a static help page:
+    // 1. Add a new route in todos/route.rs:
+    //    ```rust
+    //    #[ssg]
+    //    #[get]
+    //    pub async fn help_page() -> Html<String> { ... }
+    //    ```
+    // 2. Register it here:
+    //    ```rust
+    //    router.route("/help", axum::routing::get(todos::route::help_page))
+    //    ```
+    // 3. Build static files: `virust build --ssg`
     router
         .route("/api/todos", axum::routing::get(todos::route::get_todos))
         .route("/api/todos", axum::routing::post(todos::route::create_todo))
@@ -1284,6 +1620,30 @@ pub async fn get_todos() -> Json<Vec<TodoResponse>> {
 }
 
 /// Todo list page with server-side rendering
+///
+/// SSG vs SSR Decision Guide:
+///
+/// For this TODO app, we use SSR (not SSG) because:
+/// - TODOs change frequently (user creates/updates/deletes)
+/// - Content is user-specific and dynamic
+/// - We need real-time data fetching
+///
+/// When to use #[ssg] instead:
+/// - Static pages that rarely change (about, settings, documentation)
+/// - Public content that can be pre-rendered (blog posts, marketing pages)
+/// - Pages with data that updates periodically (use #[ssg(revalidate = N)])
+///
+/// Example of adding SSG to a static help page:
+/// ```rust
+/// use virust_macros::ssg;
+///
+/// #[ssg]  // Pure static
+/// #[get]
+/// pub async fn help_page() -> Html<String> {
+///     // This would be pre-rendered at build time
+/// }
+/// ```
+/// Then run: `virust build --ssg`
 #[get]
 pub async fn list_todos() -> Html<String> {
     let rendered = RenderedHtml::new("TodoList");
