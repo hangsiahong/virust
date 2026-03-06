@@ -68,6 +68,7 @@ uuid = {{ version = "1.0", features = ["v4"] }}
         "todo" => setup_todo_template(project_dir)?,
         "ssr-blog" => setup_ssr_blog_template(project_dir)?,
         "ssr-dashboard" => setup_ssr_dashboard_template(project_dir)?,
+        "fullstack-todo" => setup_fullstack_todo_template(project_dir)?,
         _ => setup_basic_template(project_dir)?,
     }
 
@@ -992,6 +993,610 @@ export default function RefreshButton() {
 // Client components (with 'use client') are hydrated here
 "#;
     fs::write(project_dir.join("web/main.js"), main_js)?;
+
+    Ok(())
+}
+
+fn setup_fullstack_todo_template(project_dir: &Path) -> Result<()> {
+    // Create lib.rs with multiple API modules
+    let lib_rs = r#"pub mod api;
+"#;
+    fs::write(project_dir.join("src/lib.rs"), lib_rs)?;
+
+    // Create api/mod.rs with route registration for all routes
+    let api_mod = r#"pub mod todos;
+pub mod todos_id;
+
+// Register all routes
+pub fn register_routes(router: axum::Router) -> axum::Router {
+    use axum::routing::{get, post, put, delete};
+
+    router
+        // Todo list routes
+        .route("/api/todos", get(todos::list_todos))
+        .route("/api/todos", post(todos::create_todo))
+        // Individual todo routes
+        .route("/api/todos/:id", get(todos_id::get_todo))
+        .route("/api/todos/:id", put(todos_id::update_todo))
+        .route("/api/todos/:id", delete(todos_id::delete_todo))
+}
+"#;
+    fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
+
+    // Create todos/list route (SSR)
+    let todos_list = r#"use virust_macros::{get, post, render_component};
+use virust_macros::body;
+use virust_runtime::RenderedHtml;
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub struct TodoResponse {
+    pub id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub completed: bool,
+    pub created_at: u64,
+}
+
+#[derive(serde::Deserialize)]
+pub struct CreateTodoRequest {
+    pub title: String,
+    pub description: Option<String>,
+}
+
+/// Todo list page with server-side rendering
+#[get]
+#[render_component("TodoList")]
+pub async fn list_todos() -> RenderedHtml {
+    RenderedHtml::new("TodoList")
+}
+
+/// Create new todo endpoint
+#[post]
+pub async fn create_todo(#[body] input: CreateTodoRequest) -> TodoResponse {
+    TodoResponse {
+        id: uuid::Uuid::new_v4().to_string(),
+        title: input.title,
+        description: input.description,
+        completed: false,
+        created_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    }
+}
+"#;
+    fs::create_dir_all(project_dir.join("src/api/todos"))?;
+    fs::write(project_dir.join("src/api/todos/route.rs"), todos_list)?;
+
+    // Create todos_id route (SSR with path parameter)
+    let todos_id = r#"use virust_macros::{get, put, delete, render_component};
+use virust_macros::path;
+use virust_runtime::RenderedHtml;
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub struct TodoResponse {
+    pub id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub completed: bool,
+    pub created_at: u64,
+}
+
+/// Individual todo page with server-side rendering
+#[get]
+#[render_component("TodoDetail")]
+pub async fn get_todo(#[path] id: String) -> RenderedHtml {
+    RenderedHtml::with_props("TodoDetail", serde_json::json!({"id": id}))
+}
+
+/// Update todo endpoint
+#[put]
+pub async fn update_todo(
+    #[path] id: String,
+    #[body] update: UpdateTodoRequest,
+) -> TodoResponse {
+    // Update logic would go here
+    TodoResponse {
+        id: id.clone(),
+        title: update.title,
+        description: update.description,
+        completed: update.completed.unwrap_or(false),
+        created_at: 0,
+    }
+}
+
+#[derive(serde::Deserialize)]
+pub struct UpdateTodoRequest {
+    pub title: String,
+    pub description: Option<String>,
+    pub completed: Option<bool>,
+}
+
+/// Delete todo endpoint
+#[delete]
+pub async fn delete_todo(#[path] id: String) -> String {
+    // Delete logic would go here
+    format!("{{\"success\":true, \"id\":\"{}\"}}", id)
+}
+"#;
+    fs::create_dir_all(project_dir.join("src/api/todos_id"))?;
+    fs::write(project_dir.join("src/api/todos_id/route.rs"), todos_id)?;
+
+    // Create web/components directory with multiple components
+    fs::create_dir_all(project_dir.join("web/components"))?;
+
+    // TodoList.jsx - Server component for listing todos
+    let todo_list = r#"// TodoList.jsx - Server component for displaying todo list
+import TodoItem from './TodoItem';
+import AddTodoForm from './AddTodoForm';
+import { loadTodos } from './utils';
+
+export default async function TodoList() {
+  // This is rendered on the server with data
+  const todos = await loadTodos();
+
+  return (
+    <div style={{
+      maxWidth: '800px',
+      margin: '0 auto',
+      padding: '40px 20px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+    }}>
+      <header style={{
+        marginBottom: '40px',
+        textAlign: 'center',
+      }}>
+        <h1 style={{
+          fontSize: '3rem',
+          marginBottom: '10px',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          color: '#fff',
+        }}>
+          📝 Todo App
+        </h1>
+        <p style={{ color: '#888', marginTop: '10px' }}>
+          Full-stack SSR with Rust + React
+        </p>
+      </header>
+
+      <AddTodoForm />
+
+      <div style={{ marginTop: '30px' }}>
+        {todos.length === 0 ? (
+          <div style={{
+            textAlign: 'center',
+            padding: '60px 20px',
+            background: '#f9f9f9',
+            borderRadius: '8px',
+            color: '#888',
+          }}>
+            <p style={{ fontSize: '1.2rem' }}>No todos yet. Create one above! 🚀</p>
+          </div>
+        ) : (
+          <ul style={{ listStyle: 'none', padding: 0 }}>
+            {todos.map(todo => (
+              <TodoItem key={todo.id} todo={todo} />
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <footer style={{
+        marginTop: '60px',
+        paddingTop: '20px',
+        borderTop: '1px solid #e0e0e0',
+        textAlign: 'center',
+        color: '#888',
+        fontSize: '0.9rem',
+      }}>
+        <p>Built with ❤️ using Virust v0.4</p>
+        <p style={{ marginTop: '5px' }}>
+          • Server-side rendering • File-based routing • TypeScript support
+        </p>
+      </footer>
+    </div>
+  );
+}
+"#;
+
+    // TodoItem.jsx - Server component for individual todo
+    let todo_item = r#"// TodoItem.jsx - Server component for todo item
+import DeleteButton from './DeleteButton';
+
+export default function TodoItem({ todo }) {
+  return (
+    <li style={{
+      background: 'white',
+      border: '1px solid #e0e0e0',
+      borderRadius: '8px',
+      padding: '16px',
+      marginBottom: '12px',
+      boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      transition: 'all 0.2s',
+    }}>
+      <input
+        type="checkbox"
+        checked={todo.completed}
+        readOnly
+        style={{
+          width: '20px',
+          height: '20px',
+          cursor: todo.completed ? 'not-allowed' : 'pointer',
+        }}
+      />
+      <div style={{
+        flex: 1,
+        textDecoration: todo.completed ? 'line-through' : 'none',
+        color: todo.completed ? '#999' : '#333',
+      }}>
+        <div style={{ fontWeight: '500', fontSize: '1.1rem' }}>
+          {todo.title}
+        </div>
+        {todo.description && (
+          <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '4px' }}>
+            {todo.description}
+          </div>
+        )}
+      </div>
+      <DeleteButton todoId={todo.id} />
+    </li>
+  );
+}
+"#;
+
+    // AddTodoForm.jsx - Client component with form
+    let add_todo_form = r#"'use client';
+
+import { useState } from 'react';
+
+export default function AddTodoForm() {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!title.trim()) return;
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch('/api/todos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || null,
+        }),
+      });
+
+      if (response.ok) {
+        setTitle('');
+        setDescription('');
+        // Reload page to show new todo (could use HMR in future)
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Failed to create todo:', error);
+      alert('Failed to create todo. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{
+      background: 'white',
+      padding: '24px',
+      borderRadius: '8px',
+      marginBottom: '30px',
+      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+    }}>
+      <h2 style={{
+        fontSize: '1.5rem',
+        marginBottom: '16px',
+        color: '#333',
+      }}>
+        Add New Todo
+      </h2>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555' }}>
+            Title *
+          </label>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="What needs to be done?"
+            required
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              fontSize: '1rem',
+            }}
+          />
+        </div>
+        <div>
+          <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555' }}>
+            Description (optional)
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Add more details..."
+            rows={3}
+            style={{
+              width: '100%',
+              padding: '10px',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              fontSize: '1rem',
+              fontFamily: 'monospace',
+            }}
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={isSubmitting || !title.trim()}
+          style={{
+            padding: '12px 24px',
+            background: isSubmitting || !title.trim() ? '#ccc' : '#667eea',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            fontSize: '1rem',
+            fontWeight: '500',
+            cursor: isSubmitting || !title.trim() ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {isSubmitting ? 'Adding...' : 'Add Todo'}
+        </button>
+      </div>
+    </form>
+  );
+}
+"#;
+
+    // DeleteButton.jsx - Client component for deleting todos
+    let delete_button = r#"'use client';
+
+import { useState } from 'react';
+
+export default function DeleteButton({ todoId }) {
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!confirm('Are you sure you want to delete this todo?')) return;
+
+    setIsDeleting(true);
+
+    try {
+      const response = await fetch(`/api/todos/${todoId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Reload page to show updated list
+        window.location.reload();
+      }
+    } catch (error) {
+      console.error('Failed to delete todo:', error);
+      alert('Failed to delete todo. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleDelete}
+      disabled={isDeleting}
+      style={{
+        padding: '8px 16px',
+        background: isDeleting ? '#ccc' : '#ef4444',
+        color: 'white',
+        border: 'none',
+        borderRadius: '4px',
+        fontSize: '0.9rem',
+        fontWeight: '500',
+        cursor: isDeleting ? 'not-allowed' : 'pointer',
+      }}
+    >
+      {isDeleting ? 'Deleting...' : '🗑️ Delete'}
+    </button>
+  );
+}
+"#;
+
+    // TodoDetail.jsx - Server component for individual todo
+    let todo_detail = r#"// TodoDetail.jsx - Server component for todo detail page
+import { loadTodo } from './utils';
+
+export default async function TodoDetail({ id }) {
+  // Fetch todo data on server
+  const todo = await loadTodo(id);
+
+  if (!todo) {
+    return (
+      <div style={{
+        padding: '40px',
+        textAlign: 'center',
+        color: '#888',
+      }}>
+        <h1>Todo not found</h1>
+        <p>The todo you're looking for doesn't exist.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      maxWidth: '800px',
+      margin: '0 auto',
+      padding: '40px 20px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+    }}>
+      <nav style={{ marginBottom: '30px' }}>
+        <a
+          href="/"
+          style={{
+            color: '#667eea',
+            textDecoration: 'none',
+            fontWeight: '500',
+          }}
+        >
+          ← Back to Todos
+        </a>
+      </nav>
+
+      <div style={{
+        background: 'white',
+        padding: '30px',
+        borderRadius: '8px',
+        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+      }}>
+        <h1 style={{ fontSize: '2.5rem', marginBottom: '20px', color: '#333' }}>
+          {todo.title}
+        </h1>
+
+        {todo.description && (
+          <p style={{
+            fontSize: '1.1rem',
+            color: '#666',
+            lineHeight: '1.6',
+            marginBottom: '20px',
+          }}>
+            {todo.description}
+          </p>
+        )}
+
+        <div style={{
+          display: 'flex',
+          gap: '20px',
+          padding: '20px 0',
+          borderTop: '1px solid #e0e0e0',
+        }}>
+          <div>
+            <strong>Status:</strong>{' '}
+            <span style={{
+              color: todo.completed ? '#10b981' : '#f59e0b',
+              fontWeight: '500',
+            }}>
+              {todo.completed ? '✓ Completed' : '○ Pending'}
+            </span>
+          </div>
+          <div>
+            <strong>Created:</strong> {new Date(todo.created_at).toLocaleDateString()}
+          </div>
+        </div>
+
+        <div style={{
+          marginTop: '20px',
+          padding: '20px',
+          background: '#f9f9f9',
+          borderRadius: '4px',
+        }}>
+          <h3 style={{ fontSize: '1.1rem', marginBottom: '10px', color: '#555' }}>
+            Actions
+          </h3>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              padding: '8px 16px',
+              background: '#667eea',
+              color: 'white',
+              border: 'none',
+              borderRadius: '4px',
+              fontSize: '0.9rem',
+              cursor: 'pointer',
+            }}
+          >
+            🔄 Refresh
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+"#;
+
+    // utils.ts - Utility functions for data fetching
+    let utils = r#"// utils.ts - Utility functions for data fetching and type definitions
+
+// Type definitions
+export interface Todo {
+  id: string;
+  title: string;
+  description: string | null;
+  completed: boolean;
+  created_at: number;
+}
+
+// Mock data (replace with actual API calls in production)
+export async function loadTodos(): Promise<Todo[]> {
+  // In production, fetch from API
+  const response = await fetch('/api/todos');
+  const todos = await response.json();
+  return todos;
+}
+
+export async function loadTodo(id: string): Promise<Todo | null> {
+  // In production, fetch from API
+  const response = await fetch(`/api/todos/${id}`);
+  if (!response.ok) return null;
+  const todo = await response.json();
+  return todo;
+}
+"#;
+
+    // Write all component files
+    fs::write(project_dir.join("web/components/TodoList.jsx"), todo_list)?;
+    fs::write(project_dir.join("web/components/TodoItem.jsx"), todo_item)?;
+    fs::write(project_dir.join("web/components/AddTodoForm.jsx"), add_todo_form)?;
+    fs::write(project_dir.join("web/components/DeleteButton.jsx"), delete_button)?;
+    fs::write(project_dir.join("web/components/TodoDetail.jsx"), todo_detail)?;
+    fs::write(project_dir.join("web/components/utils.ts"), utils)?;
+
+    // Create web/index.html
+    let index_html = r#"<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo App - Full Stack SSR</title>
+</head>
+<body>
+    <div id="root">Loading...</div>
+    <script type="module" src="/main.js"></script>
+</body>
+</html>
+"#;
+    fs::write(project_dir.join("web/index.html"), index_html)?;
+
+    // Create web/main.js
+    let main_js = r#"console.log('Todo app initialized with SSR');
+console.log('Server components rendered on the server');
+console.log('Client components interactive in the browser');
+"#;
+    fs::write(project_dir.join("web/main.js"), main_js)?;
+
+    // Create web/package.json
+    let package_json = r#"{
+  "name": "todo-app",
+  "version": "0.1.0",
+  "type": "module"
+}"#;
+    fs::write(project_dir.join("web/package.json"), package_json)?;
 
     Ok(())
 }
