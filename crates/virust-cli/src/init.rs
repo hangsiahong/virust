@@ -95,42 +95,12 @@ async fn main() -> anyhow::Result<()> {
 "#;
     fs::write(project_dir.join("src/main.rs"), main_rs)?;
 
-    // Create vite.config.ts
-    let vite_config = r#"import { defineConfig } from 'vite'
+    // No longer need vite.config.ts - using pure static file serving
 
-export default defineConfig({
-  server: {
-    port: 5173,
-    proxy: {
-      // Proxy API requests to backend
-      '/api': {
-        target: 'http://127.0.0.1:3000',
-        changeOrigin: true,
-      },
-      // Proxy WebSocket connections to backend
-      '/ws': {
-        target: 'ws://127.0.0.1:3000',
-        ws: true,
-      },
-    },
-  },
-})
-"#;
-    fs::write(project_dir.join("web/vite.config.ts"), vite_config)?;
-
-    // Create web/package.json
+    // Create minimal web/package.json (no vite dependency)
     let package_json = r#"{
   "name": "virust-app",
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "devDependencies": {
-    "vite": "^5.0.0"
-  }
+  "version": "0.1.0"
 }"#;
     fs::write(project_dir.join("web/package.json"), package_json)?;
 
@@ -139,8 +109,7 @@ export default defineConfig({
     println!();
     println!("Next steps:");
     println!("  cd {}", name);
-    println!("  npm install  # Install frontend dependencies");
-    println!("  virust dev  # Start both frontend and backend");
+    println!("  virust dev  # Start server on http://127.0.0.1:3000");
     println!();
     println!("Note: This project uses path dependencies to the local virust workspace.");
     println!("      Set VIRUST_PATH environment variable if the virust crates are in a custom location.");
