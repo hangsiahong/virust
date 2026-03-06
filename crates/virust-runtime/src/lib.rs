@@ -7,6 +7,7 @@ pub mod extraction;
 pub mod typescript;
 pub mod persistence;
 pub mod struct_parser;
+pub mod inventory_registry;
 
 use axum::{Router, routing::get};
 use http::create_http_router;
@@ -15,6 +16,7 @@ pub use watcher::create_watcher;
 pub use registry::{RouteRegistry, HttpHandler, WsHandler, TypeDefinition, RouteType, RouteEntry, register_type, get_registered_types};
 pub use discovery::{discover_routes, discover_routes_from_fs, RouteFile, DiscoveredRoute};
 pub use typescript::TypeScriptGenerator;
+pub use inventory_registry::{collect_routes};
 
 pub struct VirustApp {
     http_router: Router,
