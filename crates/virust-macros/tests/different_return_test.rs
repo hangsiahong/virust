@@ -1,7 +1,7 @@
 use virust_macros::get;
 
 #[get]
-async fn get_user(#[path] id: String) -> i32 {
+async fn get_user(#[param] id: String) -> i32 {
     42
 }
 

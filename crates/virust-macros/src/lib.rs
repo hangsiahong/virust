@@ -1078,6 +1078,8 @@ pub fn render_component(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// With incremental static regeneration (revalidate every 60 seconds):
 /// ```rust
+/// use virust_macros::ssg;
+///
 /// #[ssg(revalidate = 60)]
 /// pub async fn blog_post() -> String {
 ///     "Post".to_string()
@@ -1114,6 +1116,8 @@ pub fn ssg(_attrs: TokenStream, input: TokenStream) -> TokenStream {
 ///
 /// Cache for 5 minutes (300 seconds):
 /// ```rust
+/// use virust_macros::cache;
+///
 /// #[cache(max_age = 300)]
 /// pub async fn get_user() -> String {
 ///     "user".to_string()

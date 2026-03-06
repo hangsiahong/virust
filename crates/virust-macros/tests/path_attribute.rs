@@ -8,7 +8,7 @@ pub struct UserResponse {
 }
 
 #[get]
-async fn get_user(#[path] id: String) -> String {
+async fn get_user(#[param] id: String) -> String {
     let response = UserResponse {
         id: id.clone(),
         name: format!("User {}", id),

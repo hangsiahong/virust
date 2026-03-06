@@ -9,22 +9,22 @@ pub struct UpdateRequest {
 
 // Test with both path and body parameters
 #[post]
-async fn update_item(#[path] id: String, #[body] data: UpdateRequest) -> String {
+async fn update_item(#[param] id: String, #[body] data: UpdateRequest) -> String {
     format!("Updating item {} with {:?}", id, data)
 }
 
 #[put]
-async fn replace_item(#[path] id: String, #[body] data: UpdateRequest) -> String {
+async fn replace_item(#[param] id: String, #[body] data: UpdateRequest) -> String {
     format!("Replacing item {} with {:?}", id, data)
 }
 
 #[delete]
-async fn delete_item(#[path] id: String, #[body] reason: String) -> String {
+async fn delete_item(#[param] id: String, #[body] reason: String) -> String {
     format!("Deleting item {} because {}", id, reason)
 }
 
 #[get]
-async fn get_item(#[path] id: String, #[body] filter: String) -> String {
+async fn get_item(#[param] id: String, #[body] filter: String) -> String {
     format!("Getting item {} with filter {}", id, filter)
 }
 
