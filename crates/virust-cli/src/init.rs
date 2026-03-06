@@ -106,12 +106,14 @@ async fn main() -> anyhow::Result<()> {{
 
     // No longer need vite.config.ts - using pure static file serving
 
-    // Create minimal web/package.json (no vite dependency)
-    let package_json = r#"{
+    // Create minimal web/package.json (no vite dependency) unless template already created one
+    if !project_dir.join("web/package.json").exists() {
+        let package_json = r#"{
   "name": "virust-app",
   "version": "0.1.0"
 }"#;
-    fs::write(project_dir.join("web/package.json"), package_json)?;
+        fs::write(project_dir.join("web/package.json"), package_json)?;
+    }
 
     println!("✓ Created project '{}'", name);
     println!("✓ Template: {}", template);
@@ -1124,78 +1126,58 @@ pub async fn delete_todo(#[path] id: String) -> String {
     fs::create_dir_all(project_dir.join("src/api/todos_id"))?;
     fs::write(project_dir.join("src/api/todos_id/route.rs"), todos_id)?;
 
-    // Create web/components directory with multiple components
+    // Create web/components directory with TypeScript/TSX components
     fs::create_dir_all(project_dir.join("web/components"))?;
 
-    // TodoList.jsx - Server component for listing todos
-    let todo_list = r#"// TodoList.jsx - Server component for displaying todo list
+    // TodoList.tsx - Server component with TypeScript and Tailwind
+    let todo_list = r#"// TodoList.tsx - Server component for displaying todo list
 import TodoItem from './TodoItem';
 import AddTodoForm from './AddTodoForm';
 import { loadTodos } from './utils';
 
-export default async function TodoList() {
+interface Todo {
+  id: string;
+  title: string;
+  description: string | null;
+  completed: boolean;
+  created_at: number;
+}
+
+export default async function TodoList(): Promise<JSX.Element> {
   // This is rendered on the server with data
-  const todos = await loadTodos();
+  const todos: Todo[] = await loadTodos();
 
   return (
-    <div style={{
-      maxWidth: '800px',
-      margin: '0 auto',
-      padding: '40px 20px',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-    }}>
-      <header style={{
-        marginBottom: '40px',
-        textAlign: 'center',
-      }}>
-        <h1 style={{
-          fontSize: '3rem',
-          marginBottom: '10px',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent',
-          color: '#fff',
-        }}>
+    <div className="max-w-3xl mx-auto px-4 py-10 font-sans">
+      <header className="mb-10 text-center">
+        <h1 className="text-5xl mb-2 bg-gradient-to-r from-purple-500 to-indigo-600 bg-clip-text text-transparent">
           📝 Todo App
         </h1>
-        <p style={{ color: '#888', marginTop: '10px' }}>
-          Full-stack SSR with Rust + React
+        <p className="text-gray-500 mt-2">
+          Full-stack SSR with Rust + React + TypeScript
         </p>
       </header>
 
       <AddTodoForm />
 
-      <div style={{ marginTop: '30px' }}>
+      <div className="mt-8">
         {todos.length === 0 ? (
-          <div style={{
-            textAlign: 'center',
-            padding: '60px 20px',
-            background: '#f9f9f9',
-            borderRadius: '8px',
-            color: '#888',
-          }}>
-            <p style={{ fontSize: '1.2rem' }}>No todos yet. Create one above! 🚀</p>
+          <div className="text-center py-16 bg-gray-50 rounded-lg text-gray-500">
+            <p className="text-xl">No todos yet. Create one above! 🚀</p>
           </div>
         ) : (
-          <ul style={{ listStyle: 'none', padding: 0 }}>
-            {todos.map(todo => (
+          <ul className="space-y-3">
+            {todos.map((todo: Todo) => (
               <TodoItem key={todo.id} todo={todo} />
             ))}
           </ul>
         )}
       </div>
 
-      <footer style={{
-        marginTop: '60px',
-        paddingTop: '20px',
-        borderTop: '1px solid #e0e0e0',
-        textAlign: 'center',
-        color: '#888',
-        fontSize: '0.9rem',
-      }}>
+      <footer className="mt-16 pt-6 border-t border-gray-200 text-center text-gray-500 text-sm">
         <p>Built with ❤️ using Virust v0.4</p>
-        <p style={{ marginTop: '5px' }}>
-          • Server-side rendering • File-based routing • TypeScript support
+        <p className="mt-1">
+          • Server-side rendering • File-based routing • TypeScript + Tailwind
         </p>
       </footer>
     </div>
@@ -1203,44 +1185,37 @@ export default async function TodoList() {
 }
 "#;
 
-    // TodoItem.jsx - Server component for individual todo
-    let todo_item = r#"// TodoItem.jsx - Server component for todo item
+    // TodoItem.tsx - Server component with TypeScript
+    let todo_item = r#"// TodoItem.tsx - Server component for todo item
 import DeleteButton from './DeleteButton';
 
-export default function TodoItem({ todo }) {
+interface Todo {
+  id: string;
+  title: string;
+  description: string | null;
+  completed: boolean;
+  created_at: number;
+}
+
+interface TodoItemProps {
+  todo: Todo;
+}
+
+export default function TodoItem({ todo }: TodoItemProps): JSX.Element {
   return (
-    <li style={{
-      background: 'white',
-      border: '1px solid #e0e0e0',
-      borderRadius: '8px',
-      padding: '16px',
-      marginBottom: '12px',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      transition: 'all 0.2s',
-    }}>
+    <li className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm flex items-center gap-3 transition-all hover:shadow-md">
       <input
         type="checkbox"
         checked={todo.completed}
         readOnly
-        style={{
-          width: '20px',
-          height: '20px',
-          cursor: todo.completed ? 'not-allowed' : 'pointer',
-        }}
+        className="w-5 h-5 cursor-not-allowed"
       />
-      <div style={{
-        flex: 1,
-        textDecoration: todo.completed ? 'line-through' : 'none',
-        color: todo.completed ? '#999' : '#333',
-      }}>
-        <div style={{ fontWeight: '500', fontSize: '1.1rem' }}>
+      <div className={`flex-1 ${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+        <div className="font-semibold text-lg">
           {todo.title}
         </div>
         {todo.description && (
-          <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '4px' }}>
+          <div className="text-sm text-gray-600 mt-1">
             {todo.description}
           </div>
         )}
@@ -1251,36 +1226,43 @@ export default function TodoItem({ todo }) {
 }
 "#;
 
-    // AddTodoForm.jsx - Client component with form
+    // AddTodoForm.tsx - Client component with TypeScript and Tailwind
     let add_todo_form = r#"'use client';
 
-import { useState } from 'react';
+import { useState, FormEvent } from 'react';
 
-export default function AddTodoForm() {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+interface CreateTodoRequest {
+  title: string;
+  description?: string;
+}
 
-  const handleSubmit = async (e) => {
+export default function AddTodoForm(): JSX.Element {
+  const [title, setTitle] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>): Promise<void> => {
     e.preventDefault();
     if (!title.trim()) return;
 
     setIsSubmitting(true);
 
     try {
+      const payload: CreateTodoRequest = {
+        title: title.trim(),
+        description: description.trim() || undefined,
+      };
+
       const response = await fetch('/api/todos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: title.trim(),
-          description: description.trim() || null,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
         setTitle('');
         setDescription('');
-        // Reload page to show new todo (could use HMR in future)
+        // Reload page to show new todo
         window.location.reload();
       }
     } catch (error) {
@@ -1292,23 +1274,13 @@ export default function AddTodoForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} style={{
-      background: 'white',
-      padding: '24px',
-      borderRadius: '8px',
-      marginBottom: '30px',
-      boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-    }}>
-      <h2 style={{
-        fontSize: '1.5rem',
-        marginBottom: '16px',
-        color: '#333',
-      }}>
+    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg shadow-md mb-8">
+      <h2 className="text-2xl mb-4 text-gray-800">
         Add New Todo
       </h2>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div className="flex flex-col gap-3">
         <div>
-          <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555' }}>
+          <label className="block mb-1 font-medium text-gray-700">
             Title *
           </label>
           <input
@@ -1317,17 +1289,11 @@ export default function AddTodoForm() {
             onChange={(e) => setTitle(e.target.value)}
             placeholder="What needs to be done?"
             required
-            style={{
-              width: '100%',
-              padding: '10px',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              fontSize: '1rem',
-            }}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
           />
         </div>
         <div>
-          <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500', color: '#555' }}>
+          <label className="block mb-1 font-medium text-gray-700">
             Description (optional)
           </label>
           <textarea
@@ -1335,29 +1301,17 @@ export default function AddTodoForm() {
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Add more details..."
             rows={3}
-            style={{
-              width: '100%',
-              padding: '10px',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              fontSize: '1rem',
-              fontFamily: 'monospace',
-            }}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
           />
         </div>
         <button
           type="submit"
           disabled={isSubmitting || !title.trim()}
-          style={{
-            padding: '12px 24px',
-            background: isSubmitting || !title.trim() ? '#ccc' : '#667eea',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: '1rem',
-            fontWeight: '500',
-            cursor: isSubmitting || !title.trim() ? 'not-allowed' : 'pointer',
-          }}
+          className={`px-6 py-2 rounded-md font-medium text-white transition-colors ${
+            isSubmitting || !title.trim()
+              ? 'bg-gray-300 cursor-not-allowed'
+              : 'bg-purple-600 hover:bg-purple-700 cursor-pointer'
+          }`}
         >
           {isSubmitting ? 'Adding...' : 'Add Todo'}
         </button>
@@ -1367,15 +1321,19 @@ export default function AddTodoForm() {
 }
 "#;
 
-    // DeleteButton.jsx - Client component for deleting todos
+    // DeleteButton.tsx - Client component with TypeScript
     let delete_button = r#"'use client';
 
 import { useState } from 'react';
 
-export default function DeleteButton({ todoId }) {
-  const [isDeleting, setIsDeleting] = useState(false);
+interface DeleteButtonProps {
+  todoId: string;
+}
 
-  const handleDelete = async () => {
+export default function DeleteButton({ todoId }: DeleteButtonProps): JSX.Element {
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
+  const handleDelete = async (): Promise<void> => {
     if (!confirm('Are you sure you want to delete this todo?')) return;
 
     setIsDeleting(true);
@@ -1401,16 +1359,11 @@ export default function DeleteButton({ todoId }) {
     <button
       onClick={handleDelete}
       disabled={isDeleting}
-      style={{
-        padding: '8px 16px',
-        background: isDeleting ? '#ccc' : '#ef4444',
-        color: 'white',
-        border: 'none',
-        borderRadius: '4px',
-        fontSize: '0.9rem',
-        fontWeight: '500',
-        cursor: isDeleting ? 'not-allowed' : 'pointer',
-      }}
+      className={`px-4 py-2 rounded-md text-sm font-medium text-white transition-colors ${
+        isDeleting
+          ? 'bg-gray-300 cursor-not-allowed'
+          : 'bg-red-500 hover:bg-red-600 cursor-pointer'
+      }`}
     >
       {isDeleting ? 'Deleting...' : '🗑️ Delete'}
     </button>
@@ -1418,108 +1371,76 @@ export default function DeleteButton({ todoId }) {
 }
 "#;
 
-    // TodoDetail.jsx - Server component for individual todo
-    let todo_detail = r#"// TodoDetail.jsx - Server component for todo detail page
+    // TodoDetail.tsx - Server component with TypeScript
+    let todo_detail = r#"// TodoDetail.tsx - Server component for todo detail page
 import { loadTodo } from './utils';
 
-export default async function TodoDetail({ id }) {
+interface Todo {
+  id: string;
+  title: string;
+  description: string | null;
+  completed: boolean;
+  created_at: number;
+}
+
+interface TodoDetailProps {
+  id: string;
+}
+
+export default async function TodoDetail({ id }: TodoDetailProps): Promise<JSX.Element> {
   // Fetch todo data on server
-  const todo = await loadTodo(id);
+  const todo: Todo | null = await loadTodo(id);
 
   if (!todo) {
     return (
-      <div style={{
-        padding: '40px',
-        textAlign: 'center',
-        color: '#888',
-      }}>
-        <h1>Todo not found</h1>
+      <div className="px-10 text-center text-gray-500 py-16">
+        <h1 className="text-3xl font-bold mb-4">Todo not found</h1>
         <p>The todo you're looking for doesn't exist.</p>
       </div>
     );
   }
 
   return (
-    <div style={{
-      maxWidth: '800px',
-      margin: '0 auto',
-      padding: '40px 20px',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-    }}>
-      <nav style={{ marginBottom: '30px' }}>
+    <div className="max-w-3xl mx-auto px-4 py-10 font-sans">
+      <nav className="mb-8">
         <a
           href="/"
-          style={{
-            color: '#667eea',
-            textDecoration: 'none',
-            fontWeight: '500',
-          }}
+          className="text-purple-600 hover:text-purple-700 no-underline font-medium"
         >
           ← Back to Todos
         </a>
       </nav>
 
-      <div style={{
-        background: 'white',
-        padding: '30px',
-        borderRadius: '8px',
-        boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-      }}>
-        <h1 style={{ fontSize: '2.5rem', marginBottom: '20px', color: '#333' }}>
+      <div className="bg-white p-8 rounded-lg shadow-md">
+        <h1 className="text-4xl mb-5 text-gray-800">
           {todo.title}
         </h1>
 
         {todo.description && (
-          <p style={{
-            fontSize: '1.1rem',
-            color: '#666',
-            lineHeight: '1.6',
-            marginBottom: '20px',
-          }}>
+          <p className="text-lg text-gray-600 leading-relaxed mb-5">
             {todo.description}
           </p>
         )}
 
-        <div style={{
-          display: 'flex',
-          gap: '20px',
-          padding: '20px 0',
-          borderTop: '1px solid #e0e0e0',
-        }}>
+        <div className="flex gap-5 py-5 border-t border-gray-200">
           <div>
             <strong>Status:</strong>{' '}
-            <span style={{
-              color: todo.completed ? '#10b981' : '#f59e0b',
-              fontWeight: '500',
-            }}>
+            <span className={todo.completed ? 'text-green-600' : 'text-yellow-600'}>
               {todo.completed ? '✓ Completed' : '○ Pending'}
             </span>
           </div>
           <div>
-            <strong>Created:</strong> {new Date(todo.created_at).toLocaleDateString()}
+            <strong>Created:</strong> {new Date(todo.created_at * 1000).toLocaleDateString()}
           </div>
         </div>
 
-        <div style={{
-          marginTop: '20px',
-          padding: '20px',
-          background: '#f9f9f9',
-          borderRadius: '4px',
-        }}>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '10px', color: '#555' }}>
+        <div className="mt-5 p-5 bg-gray-50 rounded-md">
+          <h3 className="text-lg mb-2 text-gray-700">
             Actions
           </h3>
           <button
             onClick={() => window.location.reload()}
-            style={{
-              padding: '8px 16px',
-              background: '#667eea',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              fontSize: '0.9rem',
-              cursor: 'pointer',
-            }}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium cursor-pointer transition-colors"
           >
             🔄 Refresh
           </button>
@@ -1530,7 +1451,7 @@ export default async function TodoDetail({ id }) {
 }
 "#;
 
-    // utils.ts - Utility functions for data fetching
+    // utils.ts - Utility functions with TypeScript
     let utils = r#"// utils.ts - Utility functions for data fetching and type definitions
 
 // Type definitions
@@ -1546,7 +1467,7 @@ export interface Todo {
 export async function loadTodos(): Promise<Todo[]> {
   // In production, fetch from API
   const response = await fetch('/api/todos');
-  const todos = await response.json();
+  const todos: Todo[] = await response.json();
   return todos;
 }
 
@@ -1554,53 +1475,131 @@ export async function loadTodo(id: string): Promise<Todo | null> {
   // In production, fetch from API
   const response = await fetch(`/api/todos/${id}`);
   if (!response.ok) return null;
-  const todo = await response.json();
+  const todo: Todo = await response.json();
   return todo;
 }
 "#;
 
     // Write all component files
-    fs::write(project_dir.join("web/components/TodoList.jsx"), todo_list)?;
-    fs::write(project_dir.join("web/components/TodoItem.jsx"), todo_item)?;
-    fs::write(project_dir.join("web/components/AddTodoForm.jsx"), add_todo_form)?;
-    fs::write(project_dir.join("web/components/DeleteButton.jsx"), delete_button)?;
-    fs::write(project_dir.join("web/components/TodoDetail.jsx"), todo_detail)?;
+    fs::write(project_dir.join("web/components/TodoList.tsx"), todo_list)?;
+    fs::write(project_dir.join("web/components/TodoItem.tsx"), todo_item)?;
+    fs::write(project_dir.join("web/components/AddTodoForm.tsx"), add_todo_form)?;
+    fs::write(project_dir.join("web/components/DeleteButton.tsx"), delete_button)?;
+    fs::write(project_dir.join("web/components/TodoDetail.tsx"), todo_detail)?;
     fs::write(project_dir.join("web/components/utils.ts"), utils)?;
 
-    // Create web/index.html
+    // Create tsconfig.json
+    let tsconfig = r#"{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "jsx": "react",
+    "strict": true,
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true
+  },
+  "include": ["components/**/*", "utils.ts"],
+  "exclude": ["node_modules"]
+}"#;
+    fs::write(project_dir.join("web/tsconfig.json"), tsconfig)?;
+
+    // Create tailwind.config.js
+    let tailwind_config = r#"/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    "./components/**/*.{js,ts,jsx,tsx}",
+    "./utils.ts"
+  ],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+}"#;
+    fs::write(project_dir.join("web/tailwind.config.js"), tailwind_config)?;
+
+    // Create postcss.config.js
+    let postcss_config = r#"module.exports = {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}"#;
+    fs::write(project_dir.join("web/postcss.config.js"), postcss_config)?;
+
+    // Create web/styles.css with Tailwind directives
+    let styles_css = r#"@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles if needed */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+"#;
+    fs::write(project_dir.join("web/styles.css"), styles_css)?;
+
+    // Create web/index.html with Tailwind CDN
     let index_html = r#"<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Todo App - Full Stack SSR</title>
+    <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
     <div id="root">Loading...</div>
-    <script type="module" src="/main.js"></script>
+    <script type="module" src="/main.ts"></script>
 </body>
 </html>
 "#;
     fs::write(project_dir.join("web/index.html"), index_html)?;
 
-    // Create web/main.js
-    let main_js = r#"console.log('Todo app initialized with SSR');
+    // Create web/main.ts
+    let main_ts = r#"console.log('Todo app initialized with SSR');
 console.log('Server components rendered on the server');
 console.log('Client components interactive in the browser');
+console.log('TypeScript + Tailwind CSS enabled');
 "#;
-    fs::write(project_dir.join("web/main.js"), main_js)?;
+    fs::write(project_dir.join("web/main.ts"), main_ts)?;
 
-    // Create web/package.json
+    // Create web/package.json with dependencies
     let package_json = r#"{
   "name": "todo-app",
   "version": "0.1.0",
-  "type": "module"
+  "type": "module",
+  "scripts": {
+    "build": "echo 'No build step required - using Tailwind CDN for development'",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.0.0",
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
 }"#;
     fs::write(project_dir.join("web/package.json"), package_json)?;
 
     Ok(())
 }
-
 fn copy_template_files(project_dir: &Path, template_name: &str) -> Result<()> {
     match template_name {
         "chat" => {
