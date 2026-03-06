@@ -13,9 +13,13 @@ pub mod render;
 pub mod middleware;
 pub mod client;
 pub mod watch;
+pub mod isr;
+pub mod cache;
 pub use render::RenderedHtml;
 pub use middleware::ssr_middleware;
 pub use watch::{watch_components, ComponentChange, ChangeType};
+pub use isr::{IsrMetadata, RouteMeta};
+pub use cache::{CacheConfig, CacheEntry, CacheStore, CacheMiddleware, cache_layer, cache_layer_with_state};
 
 use axum::{Router, routing::get};
 use tower_http::services::ServeDir;
