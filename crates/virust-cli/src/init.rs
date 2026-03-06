@@ -127,65 +127,131 @@ fn setup_basic_template(project_dir: &Path) -> Result<()> {
     // Create lib.rs that includes api modules
     let lib_rs = r#"pub mod api;
 
-pub use api::chat;
+pub use api::route;
 "#;
     fs::write(project_dir.join("src/lib.rs"), lib_rs)?;
 
     // Create api/mod.rs to export route modules
-    let api_mod = r#"pub mod chat;
+    let api_mod = r#"pub mod route;
 
 // This function is called by the runtime to register routes
 pub fn register_routes(router: axum::Router) -> axum::Router {
-    use axum::routing::get;
+    use axum::routing::post;
 
-    // Register chat WebSocket route
-    router
-        .route("/api/chat", get(chat::chat_wrapper))
+    // Register echo endpoint
+    router.route("/api/echo", post(route::route_wrapper))
 }
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
     // Create example route
-    let route_rs = r#"use virust_macros::ws;
+    let route_rs = r#"use virust_macros::post;
 use virust_macros::body;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
-pub struct ChatMessage {
+pub struct EchoMessage {
     pub message: String,
 }
 
 #[derive(Serialize)]
-pub struct ChatResponse {
+pub struct EchoResponse {
     pub ok: bool,
+    pub echoed: String,
 }
 
-#[ws]
-async fn chat(#[body] msg: ChatMessage) -> ChatResponse {
+#[post]
+pub async fn route(#[body] msg: EchoMessage) -> axum::Json<EchoResponse> {
     println!("Received: {}", msg.message);
-    ChatResponse { ok: true }
+    axum::Json(EchoResponse {
+        ok: true,
+        echoed: msg.message,
+    })
 }
 "#;
-    fs::write(project_dir.join("src/api/chat.rs"), route_rs)?;
+    fs::write(project_dir.join("src/api/route.rs"), route_rs)?;
 
-    // Create a simple web/index.html
+    // Create a simple web/index.html with example usage
     let index_html = r#"<!DOCTYPE html>
 <html>
 <head>
-    <title>Virust App</title>
+    <title>Virust App - Basic Template</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        input, button {
+            padding: 10px;
+            font-size: 16px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f5f5f5;
+            border-radius: 5px;
+        }
+    </style>
 </head>
 <body>
     <h1>Welcome to Virust!</h1>
-    <p>Edit web/index.html to change this page.</p>
+    <p>This is a basic template with a simple echo endpoint.</p>
+
+    <div class="container">
+        <input type="text" id="messageInput" placeholder="Type a message..." />
+        <button onclick="sendMessage()">Send Message</button>
+        <div class="response">
+            <strong>Response:</strong>
+            <pre id="response">Waiting for input...</pre>
+        </div>
+    </div>
+
     <script type="module" src="/main.js"></script>
     <script>
-        // HMR - Auto-injected by Virust dev mode
-        if (window.location.port === '3000') {
-            const ws = new WebSocket('ws://localhost:3000/ws');
-            ws.onmessage = (msg) => {
-                if (msg.data === 'reload') location.reload();
-            };
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const response = document.getElementById('response');
+            const message = input.value.trim();
+
+            if (!message) {
+                response.textContent = 'Please enter a message';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/echo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message })
+                });
+                const data = await res.json();
+                response.textContent = JSON.stringify(data, null, 2);
+                input.value = '';
+            } catch (err) {
+                response.textContent = 'Error: ' + err.message;
+            }
         }
+
+        // Allow Enter key to send message
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
     </script>
 </body>
 </html>
