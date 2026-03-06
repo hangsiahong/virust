@@ -1209,6 +1209,7 @@ pub async fn list_todos() -> Html<String> {
 /// Create new todo endpoint
 #[post]
 pub async fn create_todo(
+    #[body]
     Json(input): Json<CreateTodoRequest>,
 ) -> Json<TodoResponse> {
     Json(TodoResponse {
@@ -1272,6 +1273,7 @@ pub async fn get_todo(
 #[put]
 pub async fn update_todo(
     #[param] id: String,
+    #[body]
     Json(update): Json<UpdateTodoRequest>,
 ) -> Json<TodoResponse> {
     // Update logic would go here
