@@ -8,7 +8,7 @@ use std::process;
 
 #[derive(Parser)]
 #[command(name = "virust")]
-#[command(about = "Virust CLI tool")]
+#[command(about = "Virust CLI tool", version = "0.4.0")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,

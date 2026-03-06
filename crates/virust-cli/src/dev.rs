@@ -5,6 +5,29 @@ use tokio::signal;
 
 pub async fn execute() -> Result<()> {
     println!("🚀 Starting Virust development server...");
+
+    // Step 0: Install Bun dependencies if .virust directory exists
+    let virust_dir = PathBuf::from(".virust");
+    if virust_dir.exists() && virust_dir.join("package.json").exists() {
+        println!("📦 Installing Bun dependencies...");
+        match tokio::process::Command::new("bun")
+            .args(["install"])
+            .current_dir(&virust_dir)
+            .status()
+            .await
+        {
+            Ok(status) if status.success() => {
+                println!("✅ Dependencies installed");
+            }
+            Ok(_) => {
+                println!("⚠️  Bun install failed, but continuing...");
+            }
+            Err(_) => {
+                println!("ℹ️  Bun not found - skipping dependency installation");
+            }
+        }
+    }
+
     println!("Compiling and running your project...");
 
     // Step 1: Initialize Bun SSR renderer
