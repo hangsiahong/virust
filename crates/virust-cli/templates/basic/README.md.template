@@ -1,0 +1,22 @@
+# {{project_name}}
+
+A minimal Virust API project.
+
+## Getting Started
+
+```bash
+# Run development server
+cargo run
+
+# Build for production
+cargo build --release
+```
+
+## Project Structure
+
+- `src/api/` - API route handlers
+- `src/main.rs` - Application entry point
+
+## Learn More
+
+- [Virust Documentation](https://github.com/hangsiahong/virust)

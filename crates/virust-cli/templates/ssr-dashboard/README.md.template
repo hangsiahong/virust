@@ -1,0 +1,44 @@
+# {{project_name}}
+
+A modern analytics dashboard built with Virust featuring SSG and intelligent caching.
+
+## Features
+
+- **SSG**: Dashboard pre-rendered at build time
+- **Caching**: API responses cached with TTL
+- **TypeScript**: Full type safety
+- **Tailwind CSS**: Professional, responsive design
+- **Real-time Stats**: With efficient cache invalidation
+
+## Getting Started
+
+```bash
+# Install dependencies
+npm install
+
+# Run development server
+cargo run
+
+# Build for production
+cargo build --release
+npm run build
+
+# Run SSG build
+virust build
+```
+
+## Project Structure
+
+- `src/api/stats/` - Statistics endpoints with SSG + caching
+- `src/api/users/` - User data endpoints with caching
+- `web/` - React frontend with TypeScript
+- `web/components/` - Reusable dashboard components
+- `web/app.tsx` - Main dashboard component
+
+## Learning More
+
+This template demonstrates:
+- `#[ssg]` - Static generation for dashboard pages
+- `#[cache(ttl = N)]` - Response caching with TTL
+- Mixed rendering strategy (SSG + cached SSR)
+- TypeScript + Tailwind + React integration

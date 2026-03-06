@@ -1,0 +1,70 @@
+# {{project_name}}
+
+A full-stack application showcasing all Virust v0.5 features.
+
+## Features
+
+This template demonstrates all Virust v0.5 capabilities:
+
+### Rendering Strategies
+- **SSG** (Static Site Generation): Home page pre-rendered at build time
+- **ISR** (Incremental Static Regeneration): Blog posts with periodic revalidation
+- **SSR** (Server-Side Rendering): Dynamic dashboard pages
+- **Caching**: API responses cached with configurable TTL
+
+### Tech Stack
+- **TypeScript**: Full type safety across frontend and backend
+- **Tailwind CSS**: Modern, utility-first styling
+- **React Server Components**: Efficient data fetching and rendering
+- **Parallel Rendering**: Optimized performance
+
+## Project Structure
+
+```
+├── src/api/
+│   ├── home/          # SSG - Marketing pages
+│   ├── blog/          # ISR - Content pages
+│   ├── dashboard/     # SSR + Cache - Dynamic data
+│   └── api/           # API routes with caching
+└── web/               # TypeScript + Tailwind + React
+```
+
+## Getting Started
+
+```bash
+# Install dependencies
+npm install
+
+# Run development server
+cargo run
+
+# Build for production
+cargo build --release
+npm run build
+
+# Generate static pages (SSG)
+virust build
+
+# Run production server
+./target/release/{{project_name}}
+```
+
+## API Routes
+
+- `GET /api/home` - Home page data (SSG)
+- `GET /api/blog` - All blog posts (SSG)
+- `GET /api/blog/[slug]` - Single post (ISR, 1hr revalidate)
+- `GET /api/dashboard/stats` - Dashboard stats (SSR + 5min cache)
+- `GET /api/todos` - List todos (SSR + 1min cache)
+- `POST /api/todos` - Create todo
+
+## Learning More
+
+This template showcases:
+- `#[ssg]` - Build-time static generation
+- `#[ssg(revalidate = N)]` - ISR with revalidation
+- `#[cache(ttl = N)]` - Response caching
+- Mixed rendering strategies in one app
+- TypeScript + Tailwind + React integration
+
+Explore the code to see how each feature is implemented!

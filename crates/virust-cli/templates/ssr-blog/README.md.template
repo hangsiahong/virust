@@ -1,0 +1,42 @@
+# {{project_name}}
+
+A modern blog built with Virust featuring Static Site Generation (SSG) and Incremental Static Regeneration (ISR).
+
+## Features
+
+- **SSG**: Blog home page pre-rendered at build time
+- **ISR**: Individual blog posts revalidated every hour
+- **TypeScript**: Full type safety
+- **Tailwind CSS**: Modern, responsive styling
+- **React Server Components**: Efficient data fetching
+
+## Getting Started
+
+```bash
+# Install dependencies
+npm install
+
+# Run development server
+cargo run
+
+# Build for production
+cargo build --release
+npm run build
+
+# Run SSG build
+virust build
+```
+
+## Project Structure
+
+- `src/api/posts/` - Blog post endpoints with SSG/ISR
+- `web/` - React frontend with TypeScript
+- `web/components/` - Reusable React components
+- `web/app.tsx` - Main application component
+
+## Learning More
+
+This template demonstrates:
+- `#[ssg]` - Static generation at build time
+- `#[ssg(revalidate = N)]` - ISR with revalidation
+- TypeScript + Tailwind + React integration
