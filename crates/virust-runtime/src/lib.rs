@@ -12,8 +12,10 @@ pub mod hmr;
 pub mod render;
 pub mod middleware;
 pub mod client;
+pub mod watch;
 pub use render::RenderedHtml;
 pub use middleware::ssr_middleware;
+pub use watch::{watch_components, ComponentChange, ChangeType};
 
 use axum::{Router, routing::get};
 use tower_http::services::ServeDir;
