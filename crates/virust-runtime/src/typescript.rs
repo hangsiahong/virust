@@ -114,11 +114,21 @@ impl TypeScriptGenerator {
     }
 
     /// Extract struct fields from a type name
-    /// This will be implemented in next task
-    /// For now, returns None to use fallback message
+    ///
+    /// This is a placeholder - in production, we'd:
+    /// 1. Scan source files for struct definitions
+    /// 2. Parse each struct with StructParser
+    /// 3. Cache results
+    ///
+    /// For now, return None to trigger fallback
     fn extract_struct_fields(&self, _type_name: &str) -> Option<Vec<FieldInfo>> {
-        // This will be implemented in next task
-        // For now, return None to use fallback
+        use crate::struct_parser::StructParser;
+
+        // Placeholder implementation
+        // Full implementation requires:
+        // - Source file scanning infrastructure
+        // - File loading and parsing
+        // - Result caching
         None
     }
 }
