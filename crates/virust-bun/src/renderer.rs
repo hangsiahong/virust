@@ -144,6 +144,43 @@ impl BunRenderer {
 
         Ok(RenderedOutput::new(html, hydration_data))
     }
+
+    /// Invalidate the cache for a specific component
+    ///
+    /// This sends an invalidation request to the Bun process, causing it to
+    /// clear the cached version of the component. The next render will reload
+    /// the component from disk.
+    ///
+    /// This is useful for development mode when component files change.
+    ///
+    /// # Arguments
+    /// * `component_name` - The name of the component to invalidate
+    ///
+    /// # Returns
+    /// * `Ok(())` if the invalidation request was sent successfully
+    /// * `Err` if the component is not found or the IPC communication fails
+    ///
+    /// # Note
+    /// This is a "fire and forget" operation - we don't wait for a response
+    /// from the Bun process since invalidation is not critical to the request.
+    pub fn invalidate_component(&mut self, component_name: &str) -> Result<()> {
+        // Find component path
+        let component_path = self.component_registry.get(component_name)
+            .ok_or_else(|| anyhow::anyhow!("Component not found: {}", component_name))?;
+
+        // Send invalidation request
+        let request = serde_json::json!({
+            "type": "invalidate",
+            "component": component_path.to_string_lossy()
+        });
+
+        self.send_request(&request)?;
+
+        // We don't wait for a response on invalidation (fire and forget)
+        // This is because invalidation is not critical - if it fails, the worst
+        // case is that the component stays cached until the next render
+        Ok(())
+    }
 }
 
 impl Drop for BunRenderer {
@@ -228,6 +265,55 @@ mod tests {
         // We'll test component_count through the registry directly
         let registry = ComponentRegistry::new();
         assert_eq!(registry.list().len(), 0);
+    }
+
+    #[tokio::test]
+    #[ignore] // Requires Bun to be installed
+    async fn test_invalidate_component() {
+        // Create a renderer with a test web directory
+        let mut renderer = BunRenderer::new().expect("Failed to create BunRenderer");
+
+        // Set up a temporary web directory with a test component
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let web_dir = temp_dir.path();
+
+        // Create a simple test component
+        let component_path = web_dir.join("TestComponent.jsx");
+        std::fs::write(
+            &component_path,
+            r#"export default function TestComponent() {
+        return <div>Hello from TestComponent</div>;
+      }"#,
+        )
+        .expect("Failed to write test component");
+
+        // Register the component
+        renderer.set_web_dir(web_dir).expect("Failed to set web dir");
+        assert_eq!(renderer.component_count(), 1);
+
+        // Render the component twice
+        let props = serde_json::json!({});
+        let output1 = renderer
+            .render_component("TestComponent", props.clone())
+            .await
+            .expect("First render failed");
+
+        // Invalidate the cache
+        renderer
+            .invalidate_component("TestComponent")
+            .expect("Invalidation failed");
+
+        // Render again - should work even though cache was invalidated
+        let output2 = renderer
+            .render_component("TestComponent", props)
+            .await
+            .expect("Second render failed");
+
+        // Both renders should produce output
+        assert!(!output1.html.is_empty());
+        assert!(!output2.html.is_empty());
+        assert!(!output1.hydration_data.is_empty());
+        assert!(!output2.hydration_data.is_empty());
     }
 }
 
