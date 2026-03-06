@@ -37,11 +37,15 @@ lazy_static::lazy_static! {
                         match renderer.render_component(&req.component_name, req.props).await {
                             Ok(output) => {
                                 eprintln!("SSR: Render successful, HTML length: {}", output.html.len());
-                                let _ = req.tx.send(Ok(output));
+                                eprintln!("SSR: Sending response back to handler");
+                                match req.tx.send(Ok(output)).await {
+                                    Ok(_) => eprintln!("SSR: Response sent successfully"),
+                                    Err(e) => eprintln!("SSR: Failed to send response: {}", e),
+                                }
                             }
                             Err(e) => {
                                 eprintln!("SSR: Render failed: {}", e);
-                                let _ = req.tx.send(Err(anyhow::anyhow!("Render failed: {}", e)));
+                                let _ = req.tx.send(Err(anyhow::anyhow!("Render failed: {}", e))).await;
                             }
                         }
                     }
@@ -258,17 +262,32 @@ impl RenderedHtml {
 
         let (tx, mut rx) = mpsc::channel(1);
 
-        RENDER_TX.send(RenderRequest {
+        eprintln!("SSR: About to send request");
+        match RENDER_TX.send(RenderRequest {
             component_name: self.component_name.clone(),
             props: self.props.clone(),
             tx,
-        }).await?;
-        eprintln!("SSR: Request sent to render task");
+        }).await {
+            Ok(_) => eprintln!("SSR: Request sent successfully"),
+            Err(e) => {
+                eprintln!("SSR: Failed to send request: {}", e);
+                return Err(anyhow::anyhow!("Failed to send request: {}", e));
+            }
+        }
 
-        let output = rx.recv().await.ok_or_else(|| anyhow::anyhow!("No response from render task"))??;
-        eprintln!("SSR: Got response, HTML length: {}", output.html.len());
-
-        Ok(self.wrap_html(output.html, output.hydration_data))
+        eprintln!("SSR: Waiting for response...");
+        match rx.recv().await {
+            Some(result) => {
+                eprintln!("SSR: Got response");
+                let output = result?;
+                eprintln!("SSR: HTML length: {}", output.html.len());
+                Ok(self.wrap_html(output.html, output.hydration_data))
+            }
+            None => {
+                eprintln!("SSR: Channel closed without response");
+                Err(anyhow::anyhow!("No response from render task"))
+            }
+        }
     }
 
     fn wrap_html(&self, body: String, hydration_data: String) -> String {
