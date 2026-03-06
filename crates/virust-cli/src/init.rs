@@ -1160,6 +1160,11 @@ pub fn register_routes(router: Router) -> Router {
 
     // Create todos/mod.rs to declare submodules
     let todos_mod = r#"pub mod route;
+
+// Dynamic routes: use #[path] to reference [id] directory
+#[path = "[id]/route.rs"]
+mod id_route;
+pub use id_route::*;
 "#;
     fs::write(project_dir.join("src/api/todos/mod.rs"), todos_mod)?;
 
@@ -1219,6 +1224,74 @@ pub async fn create_todo(
 }
 "#;
     fs::write(project_dir.join("src/api/todos/route.rs"), todos_route)?;
+
+    // Create todos/[id]/route.rs for dynamic routes
+    fs::create_dir_all(project_dir.join("src/api/todos/[id]"))?;
+
+    let todo_id_route = r#"use axum::{response::Html, Json};
+use virust_macros::{get, put, delete};
+use virust_runtime::RenderedHtml;
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize)]
+pub struct TodoResponse {
+    pub id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub completed: bool,
+    pub created_at: u64,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateTodoRequest {
+    pub title: String,
+    pub description: Option<String>,
+    pub completed: Option<bool>,
+}
+
+/// Individual todo page with server-side rendering
+#[get]
+pub async fn get_todo(
+    #[param] id: String,
+) -> Html<String> {
+    let rendered = RenderedHtml::with_props("TodoDetail", serde_json::json!({"id": id}));
+
+    match rendered.render().await {
+        Ok(html) => Html(html),
+        Err(e) => {
+            eprintln!("SSR Error: {}", e);
+            Html(format!(
+                "<!DOCTYPE html>\n<html>\n<head><title>Error</title></head>\n<body>\n    <h1>SSR Error</h1>\n    <p>{}</p>\n</body>\n</html>",
+                e.to_string()
+            ))
+        }
+    }
+}
+
+/// Update todo endpoint
+#[put]
+pub async fn update_todo(
+    #[param] id: String,
+    Json(update): Json<UpdateTodoRequest>,
+) -> Json<TodoResponse> {
+    // Update logic would go here
+    Json(TodoResponse {
+        id: id.clone(),
+        title: update.title,
+        description: update.description,
+        completed: update.completed.unwrap_or(false),
+        created_at: 0,
+    })
+}
+
+/// Delete todo endpoint
+#[delete]
+pub async fn delete_todo(#[param] id: String) -> Json<serde_json::Value> {
+    // Delete logic would go here
+    Json(serde_json::json!({"success": true, "id": id}))
+}
+"#;
+    fs::write(project_dir.join("src/api/todos/[id]/route.rs"), todo_id_route)?;
 
     // Create web/components directory with TypeScript/TSX components
     fs::create_dir_all(project_dir.join("web/components"))?;

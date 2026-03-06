@@ -68,14 +68,14 @@ struct BodyArg {
     typ: Type,
 }
 
-/// Parse route arguments from function parameters, extracting #[path] and #[body] attributes
+/// Parse route arguments from function parameters, extracting #[param] and #[body] attributes
 fn parse_route_args(args: &Punctuated<FnArg, Comma>) -> Vec<RouteArg> {
     args.iter()
         .filter_map(|arg| {
             if let FnArg::Typed(pat) = arg {
-                // Check for #[path] attribute
+                // Check for #[param] attribute (renamed from #[path] to avoid conflict with Rust builtin)
                 let is_path = pat.attrs.iter().any(|attr| {
-                    attr.path().is_ident("path")
+                    attr.path().is_ident("param")
                 });
 
                 // Check for #[body] attribute
@@ -107,13 +107,13 @@ fn parse_route_args(args: &Punctuated<FnArg, Comma>) -> Vec<RouteArg> {
         .collect()
 }
 
-/// Strip #[path] and #[body] attributes from function parameters
+/// Strip #[param] and #[body] attributes from function parameters
 fn strip_arg_attributes(mut input: ItemFn) -> ItemFn {
     for arg in input.sig.inputs.iter_mut() {
         if let FnArg::Typed(pat) = arg {
             pat.attrs.retain(|attr| {
-                // Remove #[path] and #[body] attributes
-                !attr.path().is_ident("path") && !attr.path().is_ident("body")
+                // Remove #[param] and #[body] attributes
+                !attr.path().is_ident("param") && !attr.path().is_ident("body")
             });
         }
     }
@@ -868,7 +868,7 @@ pub fn typescript(_attr: TokenStream, item: TokenStream) -> TokenStream {
     TokenStream::from(expanded)
 }
 
-/// Marks a function parameter as a path parameter
+/// Marks a function parameter as a path parameter (LEGACY - use #[param] instead)
 ///
 /// This is a helper attribute that can be used on function parameters.
 /// Currently it serves as a marker for documentation purposes.
@@ -890,6 +890,28 @@ pub fn path(_attr: TokenStream, item: TokenStream) -> TokenStream {
     // For now, just return the item unchanged
     // In a full implementation, this would parse the function
     // and extract parameter metadata
+    item
+}
+
+/// Marks a function parameter as a path parameter
+///
+/// Use this attribute to mark function parameters that should be extracted
+/// from the URL path. This is the preferred attribute over #[path] which
+/// conflicts with Rust's builtin module path attribute.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// # use virust_macros::{get, param};
+/// #[get]
+/// async fn get_user(#[param] id: String) -> String {
+///     format!("User ID: {}", id)
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn param(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    // For now, just return the item unchanged
+    // The actual path parameter extraction is handled by the HTTP method macros
     item
 }
 
