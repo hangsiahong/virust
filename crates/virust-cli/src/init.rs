@@ -224,6 +224,7 @@ fn setup_chat_template(project_dir: &Path) -> Result<()> {
 
     // Create api/route.rs with chat implementation
     let route_rs = r#"use virust_macros::ws;
+use virust_macros::body;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -254,7 +255,7 @@ lazy_static::lazy_static! {
 }
 
 #[ws]
-async fn route(msg: ChatMessage) -> ChatResponse {
+async fn route(#[body] msg: ChatMessage) -> ChatResponse {
     let entry = ChatEntry {
         id: uuid::Uuid::new_v4().to_string(),
         username: msg.username.clone(),

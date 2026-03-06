@@ -126,16 +126,69 @@ pub fn ws(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_name = &input.sig.ident;
     let _fn_name_str = fn_name.to_string();
 
+    // Parse route arguments to extract #[body] metadata
+    let route_args = parse_route_args(&input.sig.inputs);
+
+    // Filter for body parameters
+    let body_params: Vec<_> = route_args.iter()
+        .filter_map(|arg| match arg {
+            RouteArg::Body(b) => Some(b),
+            _ => None,
+        })
+        .collect();
+
+    // Validate: only one body parameter allowed
+    if body_params.len() > 1 {
+        panic!(
+            "Only one #[body] parameter is allowed per function, found {}",
+            body_params.len()
+        );
+    }
+
+    // Strip #[body] attributes from function parameters
+    let original_fn = strip_arg_attributes(input.clone());
+
     // Extract type information
     let (_input_type, _output_type) = extract_function_types(&input);
 
-    let expanded = quote! {
-        #input
+    // Generate the expanded code
+    let expanded = if !body_params.is_empty() {
+        // Generate body extractor wrapper for WebSocket
+        let wrapper_name = format!("{}_wrapper", _fn_name_str);
+        let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
-        inventory::submit!(virust_runtime::RouteEntry {
-            path: stringify!(#fn_name),
-            route_type: virust_runtime::RouteType::WebSocket,
-        });
+        let body_param = &body_params[0];
+        let body_name = &body_param.name;
+        let body_typ = &body_param.typ;
+
+        // Get the return type from the original function
+        let return_type = &original_fn.sig.output;
+
+        quote! {
+            // Original function (stripped of attributes)
+            #original_fn
+
+            // Extractor wrapper for WebSocket
+            async fn #wrapper_ident(
+                #body_name: #body_typ
+            ) #return_type {
+                #fn_name(#body_name).await
+            }
+
+            inventory::submit!(virust_runtime::RouteEntry {
+                path: stringify!(#fn_name),
+                route_type: virust_runtime::RouteType::WebSocket,
+            });
+        }
+    } else {
+        quote! {
+            #input
+
+            inventory::submit!(virust_runtime::RouteEntry {
+                path: stringify!(#fn_name),
+                route_type: virust_runtime::RouteType::WebSocket,
+            });
+        }
     };
 
     TokenStream::from(expanded)
