@@ -120,9 +120,39 @@ async fn main() -> anyhow::Result<()> {{
     println!("✓ Created project '{}'", name);
     println!("✓ Template: {}", template);
     println!();
-    println!("Next steps:");
-    println!("  cd {}", name);
-    println!("  virust dev  # Start server on http://127.0.0.1:3000");
+
+    // Show helpful next steps based on template
+    if template == "fullstack-todo" {
+        println!("🚀 Quick Start Guide:");
+        println!("  1. cd {}", name);
+        println!("  2. cargo run        # Build and start the server");
+        println!("  3. Open http://localhost:3000");
+        println!();
+        println!("   Features:");
+        println!("   • ✅ Server-Side Rendering (SSR) with Rust + Bun");
+        println!("   • ✅ File-based routing (/api/todos)");
+        println!("   • ✅ In-memory todo storage");
+        println!("   • ✅ React + Tailwind CSS (CDN-based)");
+        println!();
+        println!("   API Endpoints:");
+        println!("   • GET    /api/todos       - List all todos");
+        println!("   • POST   /api/todos       - Create todo");
+        println!("   • GET    /api/todos/:id   - Get todo details");
+        println!("   • PUT    /api/todos/:id   - Update todo");
+        println!("   • DELETE /api/todos/:id   - Delete todo");
+        println!();
+        println!("   Development:");
+        println!("   • Edit src/api/todos/route.rs for backend logic");
+        println!("   • Edit web/main.js for frontend changes");
+        println!("   • Edit web/styles.css for styling");
+        println!();
+        println!("   Ready to build your full-stack app! 🎉");
+    } else {
+        println!("Next steps:");
+        println!("  cd {}", name);
+        println!("  virust dev  # Start server on http://127.0.0.1:3000");
+    }
+
     if use_path_deps {
         println!();
         println!("Note: This project uses path dependencies to the local virust workspace.");
