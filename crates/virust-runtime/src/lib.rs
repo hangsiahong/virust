@@ -81,6 +81,7 @@ impl VirustApp {
         // Start with base router
         let router = axum::Router::new()
             .nest_service("/", serve_dir)
+            .route("/__types", get(http::types_handler))
             .route("/__hmr", get(hmr_websocket_handler))
             .route("/ws", get(ws_upgrade))
             .with_state(self.hmr.clone());

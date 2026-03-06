@@ -7,7 +7,7 @@ async fn root_handler() -> Json<serde_json::Value> {
 }
 
 /// Handler for the /__types endpoint
-async fn types_handler() -> impl IntoResponse {
+pub async fn types_handler() -> impl IntoResponse {
     // Get all registered type definitions
     let type_definitions = crate::get_registered_types();
 
