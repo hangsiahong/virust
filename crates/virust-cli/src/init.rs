@@ -1666,7 +1666,7 @@ function loadScript(url, callback) {
   const script = document.createElement('script');
   script.src = url;
   script.onload = callback;
-  script.onerror = () => console.error(\`Failed to load \${url}\`);
+  script.onerror = () => console.error(`Failed to load ${url}`);
   document.head.appendChild(script);
 }
 
@@ -1756,7 +1756,7 @@ function initApp() {
         className: 'w-5 h-5 cursor-pointer'
       }),
       React.createElement('div', {
-        className: \`flex-1 \${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}\`
+        className: `flex-1 ${todo.completed ? 'line-through text-gray-400' : 'text-gray-800'}`
       },
         React.createElement('div', { className: 'font-semibold text-lg' }, todo.title),
         todo.description && React.createElement('div', { className: 'text-sm text-gray-600 mt-1' }, todo.description)
@@ -1830,10 +1830,10 @@ function initApp() {
         React.createElement('button', {
           type: 'submit',
           disabled: isSubmitting || !title.trim(),
-          className: \`px-6 py-2 rounded-md font-medium text-white transition-colors \${isSubmitting || !title.trim()
+          className: `px-6 py-2 rounded-md font-medium text-white transition-colors ${isSubmitting || !title.trim()
             ? 'bg-gray-300 cursor-not-allowed'
             : 'bg-purple-600 hover:bg-purple-700 cursor-pointer'
-          }\`
+          }`
         }, isSubmitting ? 'Adding...' : 'Add Todo')
       )
     );
@@ -1849,7 +1849,7 @@ function initApp() {
       setIsDeleting(true);
 
       try {
-        const response = await fetch(\`/api/todos/\${todoId}\`, {
+        const response = await fetch(`/api/todos/${todoId}`, {
           method: 'DELETE',
         });
 
@@ -1867,10 +1867,10 @@ function initApp() {
     return React.createElement('button', {
       onClick: handleDelete,
       disabled: isDeleting,
-      className: \`px-4 py-2 rounded-md text-sm font-medium text-white transition-colors \${isDeleting
+      className: `px-4 py-2 rounded-md text-sm font-medium text-white transition-colors ${isDeleting
         ? 'bg-gray-300 cursor-not-allowed'
         : 'bg-red-500 hover:bg-red-600 cursor-pointer'
-      }\`
+      }`
     }, isDeleting ? 'Deleting...' : '🗑️ Delete');
   }
 
@@ -1887,11 +1887,7 @@ function initApp() {
     fs::write(project_dir.join("web/main.js"), main_js)?;
 
     // Create comprehensive styles.css with actual CSS (not Tailwind directives)
-    let mut styles_css = include_str!("../templates/todo/web/styles.css");
-    
-    // If the template styles.css doesn't exist or has Tailwind directives, create our own
-    if styles_css.contains("@tailwind") {
-        styles_css = r#"/* Tailwind-like utility classes */
+    let styles_css = r#"/* Tailwind-like utility classes */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -1992,8 +1988,7 @@ button { font-family: inherit; }
 button:disabled { opacity: 0.6; cursor: not-allowed; }
 .py-5 { padding-top: 1.25rem; padding-bottom: 1.25rem; }
 "#;
-    }
-    
+
     fs::write(project_dir.join("web/styles.css"), styles_css)?;
 
     Ok(())
