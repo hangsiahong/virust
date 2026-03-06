@@ -258,16 +258,17 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
         // Generate parameter declarations for wrapper signature
+        // For Axum handlers, we need to accept extractor types, not inner types
         let wrapper_params: Vec<_> = path_params.iter()
             .map(|p| {
                 let name = &p.name;
                 let typ = &p.typ;
-                quote! { #name: #typ }
+                quote! { #name: axum::extract::Path<#typ> }
             })
             .chain(body_params.iter().map(|b| {
                 let name = &b.name;
                 let typ = &b.typ;
-                quote! { #name: #typ }
+                quote! { #name: axum::Json<#typ> }
             }))
             .collect();
 
@@ -280,7 +281,7 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
         // Get the return type from the original function
         let return_type = &original_fn.sig.output;
 
-        // Generate extractors based on what parameters are present
+        // Generate extraction code to unwrap extractors
         let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
             // Both path and body parameters
             let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
@@ -291,17 +292,14 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 .chain(body_params.iter().map(|b| &b.name))
                 .collect();
             let code = quote! {
-                let path = axum::extract::Path((#(#path_names),*));
-                let (#(#path_names),*) = path.0;
-                let json = axum::Json(#body_name);
-                let #body_name = json.0;
+                let (#(#path_names),*) = (#(#path_names),*).0;
+                let #body_name = #body_name.0;
             };
             (code, all_param_names)
         } else if !path_params.is_empty() {
             // Only path parameters
             let code = quote! {
-                let path = axum::extract::Path((#(#param_names),*));
-                let (#(#param_names),*) = path.0;
+                let (#(#param_names),*) = (#(#param_names),*).0;
             };
             (code, param_names)
         } else {
@@ -309,8 +307,7 @@ pub fn get(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let body_param = &body_params[0];
             let body_name = &body_param.name;
             let code = quote! {
-                let json = axum::Json(#body_name);
-                let #body_name = json.0;
+                let #body_name = #body_name.0;
             };
             (code, vec![body_name])
         };
@@ -393,16 +390,17 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
         // Generate parameter declarations for wrapper signature
+        // For Axum handlers, we need to accept extractor types, not inner types
         let wrapper_params: Vec<_> = path_params.iter()
             .map(|p| {
                 let name = &p.name;
                 let typ = &p.typ;
-                quote! { #name: #typ }
+                quote! { #name: axum::extract::Path<#typ> }
             })
             .chain(body_params.iter().map(|b| {
                 let name = &b.name;
                 let typ = &b.typ;
-                quote! { #name: #typ }
+                quote! { #name: axum::Json<#typ> }
             }))
             .collect();
 
@@ -415,7 +413,7 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
         // Get the return type from the original function
         let return_type = &original_fn.sig.output;
 
-        // Generate extractors based on what parameters are present
+        // Generate extraction code to unwrap extractors
         let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
             // Both path and body parameters
             let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
@@ -426,17 +424,14 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 .chain(body_params.iter().map(|b| &b.name))
                 .collect();
             let code = quote! {
-                let path = axum::extract::Path((#(#path_names),*));
-                let (#(#path_names),*) = path.0;
-                let json = axum::Json(#body_name);
-                let #body_name = json.0;
+                let (#(#path_names),*) = (#(#path_names),*).0;
+                let #body_name = #body_name.0;
             };
             (code, all_param_names)
         } else if !path_params.is_empty() {
             // Only path parameters
             let code = quote! {
-                let path = axum::extract::Path((#(#param_names),*));
-                let (#(#param_names),*) = path.0;
+                let (#(#param_names),*) = (#(#param_names),*).0;
             };
             (code, param_names)
         } else {
@@ -444,8 +439,7 @@ pub fn post(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let body_param = &body_params[0];
             let body_name = &body_param.name;
             let code = quote! {
-                let json = axum::Json(#body_name);
-                let #body_name = json.0;
+                let #body_name = #body_name.0;
             };
             (code, vec![body_name])
         };
@@ -528,16 +522,17 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
         // Generate parameter declarations for wrapper signature
+        // For Axum handlers, we need to accept extractor types, not inner types
         let wrapper_params: Vec<_> = path_params.iter()
             .map(|p| {
                 let name = &p.name;
                 let typ = &p.typ;
-                quote! { #name: #typ }
+                quote! { #name: axum::extract::Path<#typ> }
             })
             .chain(body_params.iter().map(|b| {
                 let name = &b.name;
                 let typ = &b.typ;
-                quote! { #name: #typ }
+                quote! { #name: axum::Json<#typ> }
             }))
             .collect();
 
@@ -550,7 +545,7 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
         // Get the return type from the original function
         let return_type = &original_fn.sig.output;
 
-        // Generate extractors based on what parameters are present
+        // Generate extraction code to unwrap extractors
         let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
             // Both path and body parameters
             let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
@@ -561,17 +556,14 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 .chain(body_params.iter().map(|b| &b.name))
                 .collect();
             let code = quote! {
-                let path = axum::extract::Path((#(#path_names),*));
-                let (#(#path_names),*) = path.0;
-                let json = axum::Json(#body_name);
-                let #body_name = json.0;
+                let (#(#path_names),*) = (#(#path_names),*).0;
+                let #body_name = #body_name.0;
             };
             (code, all_param_names)
         } else if !path_params.is_empty() {
             // Only path parameters
             let code = quote! {
-                let path = axum::extract::Path((#(#param_names),*));
-                let (#(#param_names),*) = path.0;
+                let (#(#param_names),*) = (#(#param_names),*).0;
             };
             (code, param_names)
         } else {
@@ -579,8 +571,7 @@ pub fn put(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let body_param = &body_params[0];
             let body_name = &body_param.name;
             let code = quote! {
-                let json = axum::Json(#body_name);
-                let #body_name = json.0;
+                let #body_name = #body_name.0;
             };
             (code, vec![body_name])
         };
@@ -663,16 +654,17 @@ pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
         let wrapper_ident = Ident::new(&wrapper_name, fn_name.span());
 
         // Generate parameter declarations for wrapper signature
+        // For Axum handlers, we need to accept extractor types, not inner types
         let wrapper_params: Vec<_> = path_params.iter()
             .map(|p| {
                 let name = &p.name;
                 let typ = &p.typ;
-                quote! { #name: #typ }
+                quote! { #name: axum::extract::Path<#typ> }
             })
             .chain(body_params.iter().map(|b| {
                 let name = &b.name;
                 let typ = &b.typ;
-                quote! { #name: #typ }
+                quote! { #name: axum::Json<#typ> }
             }))
             .collect();
 
@@ -685,7 +677,7 @@ pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
         // Get the return type from the original function
         let return_type = &original_fn.sig.output;
 
-        // Generate extractors based on what parameters are present
+        // Generate extraction code to unwrap extractors
         let (extractor_code, all_params) = if !path_params.is_empty() && !body_params.is_empty() {
             // Both path and body parameters
             let path_names: Vec<_> = path_params.iter().map(|p| &p.name).collect();
@@ -696,17 +688,14 @@ pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 .chain(body_params.iter().map(|b| &b.name))
                 .collect();
             let code = quote! {
-                let path = axum::extract::Path((#(#path_names),*));
-                let (#(#path_names),*) = path.0;
-                let json = axum::Json(#body_name);
-                let #body_name = json.0;
+                let (#(#path_names),*) = (#(#path_names),*).0;
+                let #body_name = #body_name.0;
             };
             (code, all_param_names)
         } else if !path_params.is_empty() {
             // Only path parameters
             let code = quote! {
-                let path = axum::extract::Path((#(#param_names),*));
-                let (#(#param_names),*) = path.0;
+                let (#(#param_names),*) = (#(#param_names),*).0;
             };
             (code, param_names)
         } else {
@@ -714,8 +703,7 @@ pub fn delete(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let body_param = &body_params[0];
             let body_name = &body_param.name;
             let code = quote! {
-                let json = axum::Json(#body_name);
-                let #body_name = json.0;
+                let #body_name = #body_name.0;
             };
             (code, vec![body_name])
         };

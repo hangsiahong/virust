@@ -216,18 +216,18 @@ fn setup_chat_template(project_dir: &Path) -> Result<()> {
 
 // This function is called by the runtime to register routes
 pub fn register_routes(router: axum::Router) -> axum::Router {
-    use axum::routing::{get};
+    use axum::routing::{get, post};
 
-    // Register chat WebSocket route and history endpoint
+    // Register chat message endpoint and history
     router
-        .route("/api/chat", get(route::route_wrapper))
+        .route("/api/chat", post(route::route_wrapper))
         .route("/api/chat/history", get(route::history))
 }
 "#;
     fs::write(project_dir.join("src/api/mod.rs"), api_mod)?;
 
     // Create api/route.rs with chat implementation
-    let route_rs = r#"use virust_macros::ws;
+    let route_rs = r#"use virust_macros::post;
 use virust_macros::body;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -258,8 +258,8 @@ lazy_static::lazy_static! {
     static ref MESSAGE_HISTORY: Arc<RwLock<Vec<ChatEntry>>> = Arc::new(RwLock::new(Vec::new()));
 }
 
-#[ws]
-async fn route(#[body] msg: ChatMessage) -> ChatResponse {
+#[post]
+pub async fn route(#[body] msg: ChatMessage) -> axum::Json<ChatResponse> {
     let entry = ChatEntry {
         id: uuid::Uuid::new_v4().to_string(),
         username: msg.username.clone(),
@@ -277,10 +277,10 @@ async fn route(#[body] msg: ChatMessage) -> ChatResponse {
     }
 
     println!("[{}] {}: {}", entry.id, msg.username, msg.message);
-    ChatResponse {
+    axum::Json(ChatResponse {
         ok: true,
         message: Some("Message received".to_string()),
-    }
+    })
 }
 
 /// Get message history
@@ -300,8 +300,20 @@ pub async fn history() -> String {
 fn setup_todo_template(project_dir: &Path) -> Result<()> {
     // Create lib.rs
     let lib_rs = r#"pub mod api;
+pub mod persistence;
 "#;
     fs::write(project_dir.join("src/lib.rs"), lib_rs)?;
+
+    // Create persistence.rs with shared PERSISTENCE
+    let persistence_rs = r#"use std::sync::Arc;
+use virust_protocol::InMemoryPersistence;
+
+// Thread-safe persistence shared across all API modules
+lazy_static::lazy_static! {
+    pub static ref PERSISTENCE: Arc<InMemoryPersistence> = Arc::new(InMemoryPersistence::new());
+}
+"#;
+    fs::write(project_dir.join("src/persistence.rs"), persistence_rs)?;
 
     // Create api/mod.rs
     let api_mod = r#"pub mod todos;
@@ -328,8 +340,8 @@ pub fn register_routes(router: axum::Router) -> axum::Router {
     // Create api/todos.rs
     let todos_route = r#"use virust_macros::{get, post};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
-use virust_protocol::{Persistence, InMemoryPersistence};
+use virust_protocol::Persistence;
+use crate::persistence::PERSISTENCE;
 
 #[derive(Deserialize, Serialize)]
 pub struct CreateTodoRequest {
@@ -346,14 +358,9 @@ pub struct TodoResponse {
     pub created_at: i64,
 }
 
-// Thread-safe persistence
-lazy_static::lazy_static! {
-    static ref PERSISTENCE: Arc<InMemoryPersistence> = Arc::new(InMemoryPersistence::new());
-}
-
 /// List all todos
 #[get]
-async fn list_todos() -> String {
+pub async fn list_todos() -> String {
     match PERSISTENCE.list("todos").await {
         Ok(todos) => serde_json::to_string(&todos).unwrap_or_else(|_| "[]".to_string()),
         Err(_) => "[]".to_string(),
@@ -362,7 +369,7 @@ async fn list_todos() -> String {
 
 /// Create a new todo
 #[post]
-async fn create_todo(#[body] input: CreateTodoRequest) -> String {
+pub async fn create_todo(#[body] input: CreateTodoRequest) -> String {
     let todo = serde_json::json!({
         "title": input.title,
         "description": input.description,
@@ -392,9 +399,8 @@ async fn create_todo(#[body] input: CreateTodoRequest) -> String {
     // Create api/todos_id.rs for individual todo operations
     let todos_id_route = r#"use virust_macros::{get, put, delete};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
-use std::sync::Arc;
-use virust_protocol::{Persistence, InMemoryPersistence};
+use virust_protocol::Persistence;
+use crate::persistence::PERSISTENCE;
 
 #[derive(Deserialize)]
 pub struct UpdateTodoRequest {
@@ -412,15 +418,10 @@ pub struct TodoResponse {
     pub created_at: i64,
 }
 
-// Thread-safe persistence (shared with todos.rs)
-lazy_static::lazy_static! {
-    static ref PERSISTENCE: Arc<InMemoryPersistence> = Arc::new(InMemoryPersistence::new());
-}
-
 /// Get a specific todo by ID
 #[get]
-async fn get_todo(#[path] id: String) -> String {
-    match PERSISTENCE.get::<Value>("todos", &id).await {
+pub async fn get_todo(#[path] id: String) -> String {
+    match PERSISTENCE.get("todos", &id).await {
         Ok(Some(todo)) => serde_json::to_string(&todo).unwrap_or_else(|_| "{}".to_string()),
         Ok(None) => serde_json::json!({"error": "Todo not found"}).to_string(),
         Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
@@ -429,9 +430,9 @@ async fn get_todo(#[path] id: String) -> String {
 
 /// Update a todo by ID
 #[put]
-async fn update_todo(#[path] id: String, #[body] input: UpdateTodoRequest) -> String {
+pub async fn update_todo(#[path] id: String, #[body] input: UpdateTodoRequest) -> String {
     // First get the existing todo
-    let existing = match PERSISTENCE.get::<Value>("todos", &id).await {
+    let existing = match PERSISTENCE.get("todos", &id).await {
         Ok(Some(todo)) => todo,
         Ok(None) => return serde_json::json!({"error": "Todo not found"}).to_string(),
         Err(e) => return serde_json::json!({"error": e.to_string()}).to_string(),
@@ -442,11 +443,11 @@ async fn update_todo(#[path] id: String, #[body] input: UpdateTodoRequest) -> St
     if let Some(title) = &input.title {
         updated["title"] = serde_json::Value::String(title.clone());
     }
-    if let Some(description) = &input.description {
-        updated["description"] = if let Some(desc) = description {
-            serde_json::Value::String(desc.clone())
-        } else {
-            serde_json::Value::Null
+    // Handle description field - can be set to a value or explicitly to null
+    if input.description.is_some() {
+        updated["description"] = match &input.description {
+            Some(desc) => serde_json::Value::String(desc.clone()),
+            None => serde_json::Value::Null,
         };
     }
     if let Some(completed) = input.completed {
@@ -461,7 +462,7 @@ async fn update_todo(#[path] id: String, #[body] input: UpdateTodoRequest) -> St
 
 /// Delete a todo by ID
 #[delete]
-async fn delete_todo(#[path] id: String) -> String {
+pub async fn delete_todo(#[path] id: String) -> String {
     match PERSISTENCE.delete("todos", &id).await {
         Ok(_) => serde_json::json!({"success": true}).to_string(),
         Err(e) => serde_json::json!({"error": e.to_string()}).to_string(),
