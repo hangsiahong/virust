@@ -1,6 +1,7 @@
 use serde_json::Value;
 use axum::response::{Html, IntoResponse};
 use tokio::sync::mpsc;
+use std::path::Path;
 
 pub struct RenderedHtml {
     pub component_name: String,
@@ -13,48 +14,60 @@ lazy_static::lazy_static! {
         let (tx, mut rx) = mpsc::channel::<RenderRequest>(100);
 
         tokio::spawn(async move {
-            eprintln!("SSR: Render task started");
+            eprintln!("SSR: Render worker started");
+
+            // Create a PERSISTENT Bun renderer that gets reused for all requests
+            // This is much faster than spawning a new Bun process for each request
+            let mut renderer: Option<::virust_bun::BunRenderer> = None;
+            let mut render_count = 0u64;
+            let web_dir = Path::new("web");
 
             while let Some(req) = rx.recv().await {
-                eprintln!("SSR: Render task received request for component: {}", req.component_name);
+                eprintln!("SSR: Render request #{} for component: {}", render_count + 1, req.component_name);
 
-                // Create a new Bun renderer for each request
-                // This ensures the component registry is populated
-                eprintln!("SSR: Creating Bun renderer for request");
-                match ::virust_bun::BunRenderer::new() {
-                    Ok(mut renderer) => {
-                        // Set web directory to discover components
-                        use std::path::Path;
-                        let web_dir = Path::new("web");
-                        if let Err(e) = renderer.set_web_dir(web_dir) {
-                            eprintln!("SSR: Failed to set web dir: {}", e);
-                            let _ = req.tx.send(Err(anyhow::anyhow!("Failed to set web dir: {}", e)));
+                // Initialize renderer on first request or after a crash
+                if renderer.is_none() {
+                    eprintln!("SSR: Initializing persistent Bun renderer");
+                    match ::virust_bun::BunRenderer::new() {
+                        Ok(mut r) => {
+                            if let Err(e) = r.set_web_dir(web_dir) {
+                                eprintln!("SSR: Failed to set web dir: {}", e);
+                                let _ = req.tx.send(Err(anyhow::anyhow!("Failed to set web dir: {}", e)));
+                                continue;
+                            }
+                            let component_count = r.component_count();
+                            eprintln!("SSR: Persistent renderer ready with {} components", component_count);
+                            renderer = Some(r);
+                        }
+                        Err(e) => {
+                            eprintln!("SSR: Failed to create Bun renderer: {}", e);
+                            let _ = req.tx.send(Err(anyhow::anyhow!("Failed to initialize Bun: {}", e)));
                             continue;
                         }
+                    }
+                }
 
-                        eprintln!("SSR: Renderer has {} components", renderer.component_count());
-
-                        match renderer.render_component(&req.component_name, req.props).await {
-                            Ok(output) => {
-                                eprintln!("SSR: Render successful, HTML length: {}", output.html.len());
-                                eprintln!("SSR: Sending response back to handler");
-                                match req.tx.send(Ok(output)).await {
-                                    Ok(_) => eprintln!("SSR: Response sent successfully"),
-                                    Err(e) => eprintln!("SSR: Failed to send response: {}", e),
-                                }
-                            }
-                            Err(e) => {
-                                eprintln!("SSR: Render failed: {}", e);
-                                let _ = req.tx.send(Err(anyhow::anyhow!("Render failed: {}", e))).await;
-                            }
+                // Render using the persistent renderer
+                let r = renderer.as_mut().unwrap();
+                match r.render_component(&req.component_name, req.props).await {
+                    Ok(output) => {
+                        render_count += 1;
+                        eprintln!("SSR: Render #{} successful, HTML length: {}", render_count, output.html.len());
+                        match req.tx.send(Ok(output)).await {
+                            Ok(_) => {},
+                            Err(e) => eprintln!("SSR: Failed to send response: {}", e),
                         }
                     }
                     Err(e) => {
-                        eprintln!("SSR: Failed to create Bun renderer: {}", e);
-                        let _ = req.tx.send(Err(anyhow::anyhow!("Failed to initialize Bun: {}", e)));
+                        eprintln!("SSR: Render failed: {}", e);
+                        eprintln!("SSR: Marking renderer as unhealthy - will reinitialize on next request");
+                        renderer = None; // Force reinitialization on next request
+                        let _ = req.tx.send(Err(anyhow::anyhow!("Render failed: {}", e))).await;
                     }
                 }
             }
+
+            eprintln!("SSR: Render worker shutting down");
         });
 
         tx
@@ -258,34 +271,21 @@ impl RenderedHtml {
     }
 
     pub async fn render(self) -> Result<String, anyhow::Error> {
-        eprintln!("SSR: Rendering component '{}'", self.component_name);
-
         let (tx, mut rx) = mpsc::channel(1);
 
-        eprintln!("SSR: About to send request");
-        match RENDER_TX.send(RenderRequest {
+        RENDER_TX.send(RenderRequest {
             component_name: self.component_name.clone(),
             props: self.props.clone(),
             tx,
-        }).await {
-            Ok(_) => eprintln!("SSR: Request sent successfully"),
-            Err(e) => {
-                eprintln!("SSR: Failed to send request: {}", e);
-                return Err(anyhow::anyhow!("Failed to send request: {}", e));
-            }
-        }
+        }).await?;
 
-        eprintln!("SSR: Waiting for response...");
         match rx.recv().await {
             Some(result) => {
-                eprintln!("SSR: Got response");
                 let output = result?;
-                eprintln!("SSR: HTML length: {}", output.html.len());
                 Ok(self.wrap_html(output.html, output.hydration_data))
             }
             None => {
-                eprintln!("SSR: Channel closed without response");
-                Err(anyhow::anyhow!("No response from render task"))
+                Err(anyhow::anyhow!("Render task closed without responding"))
             }
         }
     }
@@ -322,18 +322,11 @@ impl IntoResponse for RenderedHtml {
         match rt.block_on(self.render()) {
             Ok(html) => Html(html).into_response(),
             Err(e) => {
-                // Log error to stderr for server-side visibility
-                eprintln!("SSR Error for component '{}': {}", component_name, e);
-                for cause in e.chain().skip(1) {
-                    eprintln!("  Caused by: {}", cause);
-                }
-
-                // Create a new RenderedHtml for error page generation
+                eprintln!("SSR Error: {} - {}", component_name, e);
                 let error_html = RenderedHtml {
                     component_name,
                     props,
                 };
-                // Return development-friendly error page
                 Html(error_html.error_page(&e)).into_response()
             }
         }
