@@ -110,6 +110,23 @@ fn parse_route_args(args: &Punctuated<FnArg, Comma>) -> Vec<RouteArg> {
                             None
                         }
                     }
+                    Pat::TupleStruct(tuple_struct) => {
+                        eprintln!("DEBUG: Pat::TupleStruct found");
+                        // Handle TupleStruct patterns like Json(update)
+                        // Extract the identifier from the first element
+                        if let Some(first_elem) = tuple_struct.elems.first() {
+                            if let Pat::Ident(inner) = first_elem {
+                                eprintln!("DEBUG: TupleStruct first elem: {:?}", inner.ident);
+                                Some(inner.ident.clone())
+                            } else {
+                                eprintln!("DEBUG: TupleStruct first elem is not Pat::Ident");
+                                None
+                            }
+                        } else {
+                            eprintln!("DEBUG: TupleStruct has no elements");
+                            None
+                        }
+                    }
                     Pat::Verbatim(_) => {
                         eprintln!("DEBUG: Pat::Verbatim found");
                         // Handle verbatim patterns by attempting to parse them
