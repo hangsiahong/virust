@@ -193,6 +193,15 @@ async fn chat(msg: ChatMessage) -> ChatResponse {
     <h1>Welcome to Virust!</h1>
     <p>Edit web/index.html to change this page.</p>
     <script type="module" src="/main.js"></script>
+    <script>
+        // HMR - Auto-injected by Virust dev mode
+        if (window.location.port === '3000') {
+            const ws = new WebSocket('ws://localhost:3000/ws');
+            ws.onmessage = (msg) => {
+                if (msg.data === 'reload') location.reload();
+            };
+        }
+    </script>
 </body>
 </html>
 "#;
