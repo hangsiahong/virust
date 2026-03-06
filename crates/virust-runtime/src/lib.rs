@@ -6,6 +6,7 @@ pub mod discovery;
 pub mod extraction;
 pub mod typescript;
 pub mod persistence;
+pub mod struct_parser;
 
 use axum::{Router, routing::get};
 use http::create_http_router;
